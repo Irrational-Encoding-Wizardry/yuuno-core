@@ -160,7 +160,7 @@ Settings to a value less than one makes it default to the number of hardware thr
         if self.can_hook_log:
             vapoursynth.set_message_handler(self._on_vs_log)
         elif self.hook_messages:
-            print("vsscript-Environment detected. Skipping hook on message-handler.")
+            self.parent.log.debug("vsscript-Environment detected. Skipping hook on message-handler.")
         core = get_proxy_or_core()
 
         self.parent.namespace['vs'] = vapoursynth
