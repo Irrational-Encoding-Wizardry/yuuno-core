@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import types
-from typing import Dict as TDict, Sequence, Type, TypeVar, Optional
+from typing import Sequence, Type, TypeVar, Optional
 
 from traitlets.utils.importstring import import_item
 from traitlets import Instance, List, Dict
