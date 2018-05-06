@@ -28,6 +28,16 @@ class Extension(Configurable):
     to Yuuno.
     """
 
+    _name: str = None
+
+    @classmethod
+    def extension_name(cls) -> str:
+        """
+        :return: The name of the module.
+        """
+        if cls._name is None:
+            return cls.__name__
+        return cls._name
 
     @classmethod
     def is_supported(cls) -> bool:
