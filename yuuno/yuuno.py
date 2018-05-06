@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import types
 from typing import Dict as TDict, Sequence, Type, TypeVar, Optional
 
 from traitlets.utils.importstring import import_item
@@ -55,7 +55,10 @@ class Yuuno(Settings):
     def _load_extensions(self) -> Sequence[Extension]:
         exts = []
         for extension in self.extension_types:
-            ext_cls = import_item(extension)
+            if callable(extension):
+                ext_cls = extension
+            else:
+                ext_cls = import_item(extension)
             if not ext_cls.is_supported():
                 self.log.info(f"Yuuno-Extension {ext_cls.__name__} reported that it is not supported on this system.")
                 continue

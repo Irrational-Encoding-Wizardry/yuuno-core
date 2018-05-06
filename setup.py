@@ -27,10 +27,7 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    "jupyter",
     "traitlets",
-    "jinja2",
-    "ipywidgets<7",
     "pillow"
 ]
 
@@ -38,9 +35,14 @@ test_requirements = [
     # TODO: put package test requirements here
 ]
 
+extras_requires = {
+    'vapoursynth': ['vapoursynth'],
+    'juptyter': ['yuuno-core']
+}
+
 setup(
-    name='yuuno',
-    version='0.8.0',
+    name='yuuno-core',
+    version='1.0.0.dev1',
     description="Yuuno = Jupyter + VapourSynth",
     long_description=readme + '\n\n' + history,
     author="stuxcrystal",
@@ -51,13 +53,14 @@ setup(
     package_data={'yuuno': ['data/*']},
     include_package_data=True,
     install_requires=requirements,
+    extras_requires=extras_requires,
     license="GNU Lesser General Public License v3 (LGPLv3)",
     zip_safe=False,
     keywords='yuuno',
     classifiers=[
         'Natural Language :: English',
 
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
 
         'Intended Audience :: Developers',
         'Intended Audience :: Other Audience',
@@ -65,9 +68,6 @@ setup(
         'License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)',
 
         'Programming Language :: Python :: 3.6',
-
-        'Framework :: IPython',
-        'Framework :: Jupyter',
 
         'Topic :: Multimedia :: Video',
         'Topic :: Multimedia :: Video :: Display',

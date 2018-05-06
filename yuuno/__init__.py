@@ -30,21 +30,6 @@ if sys.version_info < (3, 6):
         "Please make sure you are using this version."
     )
 
-
 from yuuno.yuuno import Yuuno
-
-__all__ = ["Yuuno"]
-
-
-try:
-    import IPython
-except ImportError:
-    pass
-else:
-    from yuuno.ipython.environment import load_ipython_extension
-    from yuuno.ipython.environment import unload_ipython_extension
-
-    __all__ += [
-        "load_ipython_extension",
-        "unload_ipython_extension",
-    ]
+from yuuno.autodiscover import discover_environments
+__all__ = ["Yuuno"] + discover_environments(vars())

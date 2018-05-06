@@ -23,8 +23,11 @@ from traitlets.utils.importstring import import_item
 from traitlets.config import SingletonConfigurable
 
 from traitlets import Any, CInt
+from traitlets import Union, Type
 from traitlets import default, observe
 from traitlets import DottedObjectName, List
+
+from yuuno.autodiscover import discover_extensions
 
 
 class Settings(SingletonConfigurable):
@@ -33,14 +36,12 @@ class Settings(SingletonConfigurable):
     """
     DEFAULT_EXTENSION_TYPES = [
         "yuuno.vs.extension.VapourSynth",
-        "yuuno.ipy_vs.extension.IPythonVapoursynthExtension",
-        "yuuno.comm.extension.YuunoKernelCommExtension",
     ]
 
     registry_type: str = DottedObjectName("yuuno.core.registry.Registry", config=True)
     registry = Any()
 
-    extension_types = List(DottedObjectName(), DEFAULT_EXTENSION_TYPES, config=True)
+    extension_types = List(Union([DottedObjectName(), Type()]), config=True)
 
     @observe('registry_type')
     def _reset_registry_on_reset(self, change: dict) -> None:
@@ -49,3 +50,7 @@ class Settings(SingletonConfigurable):
     @default('registry')
     def _auto_registry(self) -> All:
         return import_item(self.registry_type)()
+
+    @default('extension_types')
+    def _auto_extension_types(self):
+        return self.DEFAULT_EXTENSION_TYPES + list(discover_extensions())
