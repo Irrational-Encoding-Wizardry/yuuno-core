@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Sequence, Type, TypeVar, Optional, Union
+from typing import Union, Sequence, Type, TypeVar, Optional
 
 from traitlets.utils.importstring import import_item
 from traitlets import Instance, List
@@ -90,9 +90,12 @@ class Yuuno(Settings):
         :return: The given extension or None
         """
         for extension in self.extensions:
-            if isinstance(cls, str) and extension.extension_name() == cls:
-                return extension
-            elif isinstance(extension, cls):
+            if isinstance(cls, str):
+                if extension.get_name() == cls:
+                    return extension
+                continue
+
+            if isinstance(extension, cls):
                 return extension
         return None
 

@@ -27,14 +27,10 @@ class Extension(Configurable):
     This can be used to add support for new frameservers
     to Yuuno.
     """
-
     _name: str = None
 
     @classmethod
-    def extension_name(cls) -> str:
-        """
-        :return: The name of the module.
-        """
+    def get_name(cls) -> str:
         if cls._name is None:
             return cls.__name__
         return cls._name
