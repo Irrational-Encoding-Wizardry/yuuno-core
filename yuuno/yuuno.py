@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Sequence, Type, TypeVar, Optional
+from typing import Union, Sequence, Type, TypeVar, Optional
 
 from traitlets.utils.importstring import import_item
 from traitlets import Instance, List, Dict
@@ -83,13 +83,18 @@ class Yuuno(Settings):
         for extension in reversed(self.extensions):
             extension.deinitialize()
 
-    def get_extension(self, cls: Type[T]) -> Optional[T]:
+    def get_extension(self, cls: Union[Type[T], str]) -> Optional[T]:
         """
         Returns the loaded extension given by type.
         :param cls:  The class of the object.
         :return: The given extension or None
         """
         for extension in self.extensions:
+            if isinstance(cls, str):
+                if extension.get_name() == cls:
+                    return extension
+                continue
+
             if isinstance(extension, cls):
                 return extension
         return None

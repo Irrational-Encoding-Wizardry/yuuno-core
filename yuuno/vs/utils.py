@@ -61,10 +61,10 @@ def is_version(version_number):
 
 
 class MessageLevel(enum.IntEnum):
-    mtDebug = enum.auto()
-    mtWarning = enum.auto()
-    mtCritical = enum.auto()
-    mtFatal = enum.auto()
+    mtDebug = 0
+    mtWarning = 1
+    mtCritical = 2
+    mtFatal = 3
 
 
 class VapourSynthEnvironment(object):

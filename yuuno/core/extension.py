@@ -27,7 +27,12 @@ class Extension(Configurable):
     This can be used to add support for new frameservers
     to Yuuno.
     """
-
+    _name = None
+    @classmethod
+    def get_name(cls) -> str:
+        if cls._name is None:
+            return cls.__name__
+        return cls._name
 
     @classmethod
     def is_supported(cls) -> bool:

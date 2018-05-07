@@ -40,6 +40,7 @@ class VapourSynth(Extension):
     """
     Entry-Point for VapourSynth support of Yuuno
     """
+    _name = "VapourSynth"
 
     hook_messages: bool = CBool(True, help="""Redirect the message handler to this extension so other parts of Yuuno can handle it.
     
