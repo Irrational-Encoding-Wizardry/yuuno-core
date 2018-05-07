@@ -43,12 +43,6 @@ class Extension(Configurable):
         """
         return False
 
-    def provides(self) -> Sequence[Type]:
-        """
-        Returns extension classes this extension implements.
-        """
-        return []
-
     def initialize(self) -> None:
         """
         Called by the Yuuno-singleton so that the extension
