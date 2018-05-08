@@ -96,6 +96,9 @@ class ScriptEnvironment(object):
         raise vapoursynth.Error(VapourSynthCAPI.vpy_getError(self._handle).decode('utf-8'))
 
     def perform(self, func, counter=None):
+        if self.export is None:
+            raise vapoursynth.Error("Tried to access dead core.")
+
         if not counter:
             counter = _run_counter()
         name = '__yuuno_%d_run_%d' % (id(self), counter)

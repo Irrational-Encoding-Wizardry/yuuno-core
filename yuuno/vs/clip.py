@@ -29,7 +29,7 @@ from vapoursynth import VideoNode, VideoFrame
 from yuuno import Yuuno
 from yuuno.clip import Clip, Frame
 from yuuno.vs.extension import VapourSynth
-from yuuno.vs.utils import get_proxy_or_core, is_version
+from yuuno.vs.utils import get_proxy_or_core, is_single
 from yuuno.vs.alpha import AlphaOutputClip
 
 
@@ -107,7 +107,7 @@ def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False, direct
     :param compat:  Are we dealing with a compat format.
     :return: The extracted image.
     """
-    if is_version(36):
+    if hasattr(VideoFrame, 'get_read_array'):
         return extract_plane_new(frame, planeno, compat=compat, direction=direction)
     else:
         return extract_plane_r36compat(frame, planeno, compat=compat, direction=direction)
@@ -120,9 +120,12 @@ class VapourSynthFrameWrapper(HasTraits, Frame):
     frame: VideoFrame = Instance(VideoFrame)
     compat_frame: VideoFrame = Instance(VideoFrame)
 
+    def _extract(self) -> Image.Image:
+        self.pil_cache = extract_plane(self.compat_frame, 0, compat=True)
+
     def to_pil(self) -> Image.Image:
         if self.pil_cache is None:
-            self.pil_cache = extract_plane(self.compat_frame, 0, compat=True)
+            self._extract()
         # noinspection PyTypeChecker
         return self.pil_cache
 
@@ -133,7 +136,8 @@ class VapourSynthClipMixin(HasTraits):
     def extension(self) -> VapourSynth:
         return Yuuno.instance().get_extension(VapourSynth)
 
-    def _wrap_frame(self, frame: VideoFrame) -> VideoNode:
+    @staticmethod
+    def _wrap_frame(frame: VideoFrame) -> VideoNode:
         core = get_proxy_or_core()
 
         bc = core.std.BlankClip(
@@ -166,6 +170,12 @@ class VapourSynthClipMixin(HasTraits):
     def __getitem__(self, item) -> VapourSynthFrameWrapper:
         frame: VideoFrame = self.clip.get_frame(item)
         compat: VideoNode = self.to_compat_rgb32(frame)
+
+        if not is_single():
+            try:
+                get_proxy_or_core().std.BlankClip(self.clip)
+            except vs.Error:
+                raise RuntimeError("Tried to access clip of a dead core.")
 
         return VapourSynthFrameWrapper(frame=frame, compat_frame=compat.get_frame(0))
 

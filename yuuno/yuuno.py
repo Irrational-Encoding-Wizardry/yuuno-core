@@ -72,11 +72,12 @@ class Yuuno(Settings):
 
     def _initialize_extensions(self) -> None:
         self.extensions = self._load_extensions()
+        self.environment.post_extension_load()
+
         failed_extensions = []
         for extension in self.extensions:
             try:
                 extension.initialize()
-
             except Exception as e:
                 failed_extensions.append(extension)
                 import traceback

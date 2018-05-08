@@ -18,8 +18,6 @@
 import abc
 from collections.abc import Sequence
 
-from yuuno.vs.utils import is_version
-
 
 class AlphaOutputClipMeta(abc.ABCMeta):
     IS_VS43 = None
@@ -30,7 +28,7 @@ class AlphaOutputClipMeta(abc.ABCMeta):
     def __subclasscheck__(self, subclass):
         if self.IS_VS43 is None:
             import vapoursynth
-            self.IS_VS43 = is_version(43)
+            self.IS_VS43 = hasattr(vapoursynth, 'AlphaOutputTuple')
             self.VideoNode = vapoursynth.VideoNode
 
             if self.IS_VS43:

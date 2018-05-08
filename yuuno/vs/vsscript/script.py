@@ -100,14 +100,16 @@ class VSScriptManager(ScriptManager):
         self.scripts: Dict[str, VSScript] = {}
         create_module(self._select_current_dict)
 
-    def _select_current_dict(self):
+    def _current_script(self):
         assert hasattr(vapoursynth, 'vpy_current_environment')
         try:
             env = vapoursynth.vpy_current_environment()
         except RuntimeError:
-            return {}
+            return None
+        return self.envs.get(env.env_id, None)
 
-        env = self.envs.get(env.env_id, None)
+    def _select_current_dict(self):
+        env = self._current_script()
         if env is None:
             return {}
         return env.module_dict
@@ -119,6 +121,12 @@ class VSScriptManager(ScriptManager):
     def _on_dispose(self, id, name):
         del self.envs[id]
         del self.scripts[name]
+
+    def env_wrapper_for(self, cls):
+        def _wrapper(*args, **kwargs):
+            current_env = self._current_script()
+            return WrappedClip(current_env, cls(*args, **kwargs))
+        return _wrapper
 
     def create(self, name: str) -> Script:
         """

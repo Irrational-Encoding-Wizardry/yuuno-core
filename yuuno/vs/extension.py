@@ -32,7 +32,7 @@ from yuuno.trait_types import Callable
 from yuuno.core.extension import Extension
 from yuuno.core.registry import Registry
 
-from yuuno.vs.utils import get_proxy_or_core, is_version
+from yuuno.vs.utils import get_proxy_or_core
 from yuuno.vs.utils import MessageLevel, is_single
 from yuuno.vs.alpha import AlphaOutputClip
 
@@ -65,8 +65,6 @@ If the passed object is a callable, it will just use the callable.
         config=True
     )
 
-    registry: Registry = Instance(Registry, read_only=True)
-
     push_values: bool = CBool(True, help="""Push vs and the current core instance onto the current environment.""", config=True)
 
     core_num_threads: int = CInt(-1, help="""The number of concurrent threads used by the core. Can be set the change the number.
@@ -75,6 +73,8 @@ Settings to a value less than one makes it default to the number of hardware thr
     core_add_cache: bool = CBool(True, help="For debugging purposes only. When set to `False` no caches will be automatically inserted between filters.", config=True)
     core_accept_lowercase: bool = CBool(False, help="When set to `True` function name lookups in the core are case insensitive. Don't distribute scripts that need it to be set.", config=True)
     core_max_cache_size: int = CBool(None, allow_none=True, help="Set the upper framebuffer cache size after which memory is aggressively freed. The value is in mediabytes.", config=True)
+
+    vsscript_environment_wrap: bool = CBool(True, help="Allow Yuuno to automatically . Do not disable while running multiple cores at once.", config=True)
 
     log_handlers: TList[TCallable[[int, str], None]] = List(Callable())
 
@@ -106,22 +106,28 @@ Settings to a value less than one makes it default to the number of hardware thr
     _observe_accept_lowercase = observe("core_accept_lowercase")(_update_core_values("accept_lowercase"))
     _observe_max_cache_size   = observe("core_max_cache_size")(_update_core_values("max_cache_size"))
 
-    @default("registry")
-    def _init_registry(self):
+    def initialize_registry(self):
+        self.parent.log.debug("Registering wrappers.")
+        import vapoursynth
         from vapoursynth import VideoNode, VideoFrame
         from yuuno.vs.clip import VapourSynthClip, VapourSynthFrame
         from yuuno.vs.clip import VapourSynthAlphaClip
 
-        registry = Registry()
-        registry.register(VapourSynthClip, VideoNode)
-        registry.register(VapourSynthFrame, VideoFrame)
-        registry.register(VapourSynthAlphaClip, AlphaOutputClip)
-        if is_version(43):
+        # Detected VSScript.
+        wrapperfunc = lambda cls: cls
+        if self.script_manager is not None and self.vsscript_environment_wrap:
+            wrapperfunc = self.script_manager.env_wrapper_for
+
+        self.registry = Registry()
+        self.registry.register(wrapperfunc(VapourSynthClip), VideoNode)
+        self.registry.register(wrapperfunc(VapourSynthFrame), VideoFrame)
+        self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputClip)
+        if hasattr(vapoursynth, 'AlphaOutputTuple'):
             # Required so that IPython automatically supports alpha outputs
             from vapoursynth import AlphaOutputTuple
-            registry.register(VapourSynthAlphaClip, AlphaOutputTuple)
+            self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputTuple)
 
-        return registry
+        self.parent.registry.add_subregistry(self.registry)
 
     @classmethod
     def is_supported(cls):
@@ -130,8 +136,7 @@ Settings to a value less than one makes it default to the number of hardware thr
         except ImportError:
             return False
 
-        core = vapoursynth.get_core()
-        return is_version(36)
+        return hasattr(vapoursynth, 'construct_signature')
 
     @property
     def resize_filter(self) -> TCallable:
@@ -179,6 +184,7 @@ Settings to a value less than one makes it default to the number of hardware thr
         self.parent.namespace['core'] = core
 
     def initialize_multi_script(self):
+        self.script_manager = None
         managers: Optional['MultiScriptExtension'] = self.parent.get_extension('MultiScript')
         if managers is None:
             self.parent.log.debug("MultiScript not found. Skipping VSScript.")
@@ -186,7 +192,7 @@ Settings to a value less than one makes it default to the number of hardware thr
 
         # Check support for vapoursynth/#389 at R44
         if not self.can_mutli_env_natively:
-            self.parent.log.warn("VSScript is unstable in the currently installed version of VapourSynth.")
+            self.parent.log.info("Yuuno doesn't support VSScript for VS<R44")
             return
 
         self.parent.log.debug("Enabling VSScript.")
@@ -197,12 +203,13 @@ Settings to a value less than one makes it default to the number of hardware thr
 
     def initialize(self):
         import vapoursynth
-        self.parent.registry.add_subregistry(self.registry)
+
         self.initialize_hook(vapoursynth)
         self.initialize_namespace(vapoursynth)
         self.initialize_multi_script()
+        self.initialize_registry()
 
-        if self.parent.get_extension('MultiScript') is None:
+        if self.script_manager is None:
             self.update_core_values()
 
     def deinitialize(self):

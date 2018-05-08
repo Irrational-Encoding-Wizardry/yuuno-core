@@ -81,11 +81,6 @@ def is_single():
     return vapoursynth.Environment.is_single()
 
 
-def is_version(version_number):
-    core = get_proxy_or_core(resolve_proxy=True)
-    return core.version_number() >= version_number
-
-
 class MessageLevel(enum.IntEnum):
     mtDebug = 0
     mtWarning = 1

@@ -32,6 +32,13 @@ class Environment(Configurable):
         """
         return []
 
+    def post_extension_load(self) -> None:
+        """
+        Called directly after extensions have been loaded
+        (but not enabled)
+        """
+        pass
+
     def initialize(self) -> None:
         """
         Called by yuuno to tell it that yuuno has

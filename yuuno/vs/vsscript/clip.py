@@ -38,7 +38,7 @@ class WrappedMixin(Generic[T]):
     def wrap(name: str) -> Callable[..., Any]:
         def _func(self: 'WrappedMixin', *args, **kwargs):
             func = getattr(self.parent, name)
-            result = self.env.perform(lambda: func(*args, **kwargs))
+            result = self.env.perform(lambda: func(*args, **kwargs)).result()
             if isinstance(result, Frame):
                 result = WrappedFrame(self.env, result)
             return result
@@ -53,3 +53,7 @@ class WrappedFrame(WrappedMixin[Frame], Frame):
 class WrappedClip(WrappedMixin[Clip], Clip):
     __len__ = WrappedMixin.wrap('__len__')
     __getitem__ = WrappedMixin.wrap('__getitem__')
+
+    @property
+    def clip(self):
+        return self.parent.clip
