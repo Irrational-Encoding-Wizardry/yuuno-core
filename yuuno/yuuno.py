@@ -51,9 +51,12 @@ class Yuuno(Settings):
     def _default_namespace(self):
         return Namespace()
 
+    def _actual_extensions(self):
+        return self.extension_types + self.extensions.additional_extensions
+
     def _load_extensions(self) -> Sequence[Extension]:
         exts = []
-        for extension in self.extension_types:
+        for extension in self._actual_extensions():
             if callable(extension):
                 ext_cls = extension
             else:

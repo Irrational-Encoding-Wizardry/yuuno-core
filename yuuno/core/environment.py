@@ -15,7 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+from typing import List, str
 
 from traitlets.config import Configurable
 
@@ -24,6 +24,13 @@ class Environment(Configurable):
     """
     Defines the current environment used in Yuuno.
     """
+
+    def additional_extensions() -> List[str]:
+        """
+        Defines additional extensions that should be
+        loaded inside the environment
+        """
+        return []
 
     def initialize(self) -> None:
         """

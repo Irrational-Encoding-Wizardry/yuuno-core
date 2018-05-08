@@ -15,7 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from typing import Sequence, Type
+from typing import Sequence, Type, ClassVar, Optional
 
 from traitlets.config import Configurable
 
@@ -27,7 +27,7 @@ class Extension(Configurable):
     This can be used to add support for new frameservers
     to Yuuno.
     """
-    _name = None
+    _name: ClassVar[Optional[str]] = None
     @classmethod
     def get_name(cls) -> str:
         if cls._name is None:
