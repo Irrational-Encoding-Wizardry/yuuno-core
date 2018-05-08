@@ -31,8 +31,12 @@ class MultiScriptExtension(Extension):
     def is_supported(self):
         return True
 
-    def initialize(self):
+    def __init__(self, *args, **kwargs):
+        super(MultiScriptExtension, self).__init__(*args, **kwargs)
         self.managers = {}
+
+    def initialize(self):
+        pass
 
     def register_manager(self, name: str, manager: 'ScriptManager'):
         """
@@ -65,3 +69,4 @@ class MultiScriptExtension(Extension):
     def deinitialize(self):
         for manager in self.managers.values():
             manager.dispose_all()
+        self.managers = {}
