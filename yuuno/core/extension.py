@@ -28,6 +28,7 @@ class Extension(Configurable):
     to Yuuno.
     """
     _name: ClassVar[Optional[str]] = None
+    
     @classmethod
     def get_name(cls) -> str:
         if cls._name is None:
@@ -41,12 +42,6 @@ class Extension(Configurable):
         :return: The result of this check.
         """
         return False
-
-    def provides(self) -> Sequence[Type]:
-        """
-        Returns extension classes this extension implements.
-        """
-        return []
 
     def initialize(self) -> None:
         """

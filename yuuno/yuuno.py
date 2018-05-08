@@ -19,7 +19,7 @@
 from typing import Union, Sequence, Type, TypeVar, Optional
 
 from traitlets.utils.importstring import import_item
-from traitlets import Instance, List, Dict
+from traitlets import Instance, List
 from traitlets import default
 
 from yuuno.core.environment import Environment
@@ -38,7 +38,7 @@ class Yuuno(Settings):
     """
 
     environment: Environment = Instance(Environment)
-    extensions: Sequence[Type[Extension]] = List(Instance(Extension))
+    extensions: Sequence[Extension] = List(Instance(Extension))
 
     output: YuunoImageOutput = Instance(YuunoImageOutput)
     namespace: Namespace = Instance(Namespace)

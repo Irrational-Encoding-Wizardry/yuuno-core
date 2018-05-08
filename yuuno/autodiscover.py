@@ -29,5 +29,6 @@ def discover_environments(module_dict):
 def discover_extensions():
     for ep in pkg_resources.iter_entry_points('yuuno.extensions'):
         extension = ep.load()
-        extension._name = ep.name
+        if hasattr(extension, '_name'):
+            extension._name = ep.name
         yield extension
