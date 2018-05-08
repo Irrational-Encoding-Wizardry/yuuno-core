@@ -52,7 +52,7 @@ class Yuuno(Settings):
         return Namespace()
 
     def _actual_extensions(self):
-        return self.extension_types + self.extensions.additional_extensions
+        return self.extension_types + self.environment.additional_extensions()
 
     def _load_extensions(self) -> Sequence[Extension]:
         exts = []

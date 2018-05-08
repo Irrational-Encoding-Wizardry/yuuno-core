@@ -25,7 +25,7 @@ class Environment(Configurable):
     Defines the current environment used in Yuuno.
     """
 
-    def additional_extensions() -> List[str]:
+    def additional_extensions(self) -> List[str]:
         """
         Defines additional extensions that should be
         loaded inside the environment
