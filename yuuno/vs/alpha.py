@@ -20,6 +20,7 @@ from collections.abc import Sequence
 
 from yuuno.vs.utils import is_version
 
+
 class AlphaOutputClipMeta(abc.ABCMeta):
     IS_VS43 = None
 

@@ -62,8 +62,10 @@ class Yuuno(Settings):
             else:
                 ext_cls = import_item(extension)
             if not ext_cls.is_supported():
-                self.log.info(f"Yuuno-Extension {ext_cls.__name__} reported that it is not supported on this system.")
+                self.log.info(f"Yuuno-Extension {ext_cls.get_name()} reported that it is not supported on this system.")
                 continue
+            else:
+                self.log.debug(f"Yuuno-Extension {ext_cls.get_name()} loaded.")
 
             exts.append(ext_cls(parent=self))
         return exts
@@ -74,10 +76,14 @@ class Yuuno(Settings):
         for extension in self.extensions:
             try:
                 extension.initialize()
+
             except Exception as e:
                 failed_extensions.append(extension)
                 import traceback
                 traceback.print_exception(type(e), e, e.__traceback__)
+
+            else:
+                self.log.debug(f"Yuuno-Extension {extension.get_name()} initialized.")
 
         for extension in failed_extensions:
             self.extensions.remove(extension)

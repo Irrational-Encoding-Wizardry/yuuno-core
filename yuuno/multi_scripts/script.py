@@ -15,7 +15,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
+from pathlib import Path
 from concurrent.futures import Future
 
 from yuuno.clip import Clip
@@ -45,8 +46,8 @@ class Script(object):
         that represent the results of the script.
         """
         raise NotImplementedError
-        
-    def execute(self, code: str) -> Future:
+
+    def execute(self, code: Union[str, Path]) -> Future:
         """
         Executes the code inside the environment
         """
@@ -73,5 +74,11 @@ class ScriptManager(object):
     def dispose_all(self) -> None:
         """
         Disposes all scripts
+        """
+        raise NotImplementedError
+
+    def disable(self) -> None:
+        """
+        Disposes all scripts and tries to clean up.
         """
         raise NotImplementedError

@@ -1,0 +1,147 @@
+# -*- encoding: utf-8 -*-
+
+# Yuuno - IPython + VapourSynth
+# Copyright (C) 2018 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from pathlib import Path
+from typing import Dict, Union, Callable, Any, Optional
+
+import vapoursynth
+
+from yuuno.clip import Clip
+from yuuno.multi_scripts.script import ScriptManager, Script
+
+from yuuno.vs.vsscript.containermodule import create_module
+from yuuno.vs.vsscript.vs_capi import ScriptEnvironment
+from yuuno.vs.vsscript.vs_capi import enable_vsscript, disable_vsscript
+from yuuno.vs.vsscript.clip import WrappedClip
+from yuuno.vs.utils import inline_resolved
+
+
+class VSScript(Script):
+
+    def __init__(self, manager, name):
+        self.manager = manager
+        self.name = name
+
+        self.env = ScriptEnvironment()
+        self.exec_counter = 0
+        self.module_dict = {}
+
+        self.manager._on_create(self, self.env.id, self.name)
+
+
+    @property
+    def alive(self) -> bool:
+        """
+        Checks if the environment is still alive.
+        """
+        return self.env.alive
+
+    def _invoke_exec_counter(self):
+        self.exec_counter += 1
+        return self.exec_counter
+
+    def dispose(self) -> None:
+        """
+        Disposes the script.
+        """
+        self.manager._on_dispose(self.env.id, self.name)
+        self.env.dispose()
+
+    def get_results(self) -> Dict[str, Clip]:
+        """
+        Returns a dictionary with clips
+        that represent the results of the script.
+        """
+        return {k: WrappedClip(self, v) for k, v in self.env.outputs.items()}
+
+    @inline_resolved
+    def perform(self, cb: Callable[[], Any]) -> Any:
+        return self.env.perform(cb)
+
+    @inline_resolved
+    def execute(self, code: Union[str, Path]) -> None:
+        """
+        Executes the code inside the environment
+        """
+        filename = "<yuuno %d:%d>" % (self.env.id, self._invoke_exec_counter())
+        if isinstance(code, Path):
+            filename = str(code)
+            with open(code, "rb") as f:
+                code = f.read()
+
+        script = compile(code, filename, 'exec', dont_inherit=True)
+
+        def _run():
+            exec(script, self.module_dict, {})
+
+        self.env.perform(_run)
+
+
+class VSScriptManager(ScriptManager):
+
+    def __init__(self):
+        enable_vsscript()
+
+        self.envs: Dict[int, VSScript] = {}
+        self.scripts: Dict[str, VSScript] = {}
+        create_module(self._select_current_dict)
+
+    def _select_current_dict(self):
+        assert hasattr(vapoursynth, 'vpy_current_environment')
+        try:
+            env = vapoursynth.vpy_current_environment()
+        except RuntimeError:
+            return {}
+
+        env = self.envs.get(env.env_id, None)
+        if env is None:
+            return {}
+        return env.module_dict
+
+    def _on_create(self, script, id, name):
+        self.envs[id] = script
+        self.scripts[name] = script
+
+    def _on_dispose(self, id, name):
+        del self.envs[id]
+        del self.scripts[name]
+
+    def create(self, name: str) -> Script:
+        """
+        Creates a new script environment.
+        """
+        return VSScript(self, name)
+
+    def get(self, name: str) -> Optional[Script]:
+        """
+        Returns the script with the given name.
+        """
+        return self.scripts[name]
+
+    def dispose_all(self) -> None:
+        """
+        Disposes all scripts
+        """
+        for script in list(self.scripts.values()):
+            script.dispose()
+
+    def disable(self) -> None:
+        """
+        Disposes all scripts and tries to clean up.
+        """
+        disable_vsscript()
+        self.dispose_all()

@@ -199,7 +199,7 @@ class VapourSynthAlphaFrameWrapper(HasTraits):
 
     @property
     def color(self):
-        return clip[0]
+        return self.clip
 
     def to_pil(self):
         if self._cache is None:
@@ -215,7 +215,7 @@ class VapourSynthAlphaClip:
     def __init__(self, clip):
         if not isinstance(clip, AlphaOutputClip):
             raise ValueError("Passed non Alpha-Clip into the wrapper")
-        
+
         self.clip = VapourSynthClip(clip[0])
         if clip[1] is None:
             self.alpha = None

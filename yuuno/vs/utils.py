@@ -15,12 +15,31 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import abc
 import enum
 import types
-from typing import AnyStr, Callable
+import functools
+from typing import AnyStr, Callable, TypeVar
+from concurrent.futures import Future
 
 from traitlets.utils.importstring import import_item
+
+
+T = TypeVar("T")
+
+
+def inline_resolved(func: Callable[..., T]) -> Callable[..., Future]:
+    @functools.wraps(func)
+    def _wrapped(*args, **kwargs) -> Future:
+        fut = Future()
+        fut.set_running_or_notify_cancel()
+        try:
+            result_value = func(*args, **kwargs)
+        except Exception as e:
+            fut.set_exception(e)
+        else:
+            fut.set_result(result_value)
+        return fut
+    return _wrapped
 
 
 def get_proxy_or_core(*, resolve_proxy=False):
@@ -53,6 +72,13 @@ def filter_or_import(name: AnyStr) -> Callable:
         return getattr(getattr(core, ns), func)
     except (ValueError, AttributeError):
         return import_item(name)
+
+
+def is_single():
+    import vapoursynth
+    if not hasattr(vapoursynth, 'Environment'):
+        return vapoursynth._using_vsscript
+    return vapoursynth.Environment.is_single()
 
 
 def is_version(version_number):

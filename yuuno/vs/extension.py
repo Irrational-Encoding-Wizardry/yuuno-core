@@ -16,8 +16,9 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import sys
+from typing import TYPE_CHECKING
 from typing import Callable as TCallable, Union as TUnion
-from typing import List as TList
+from typing import List as TList, Optional
 
 from traitlets import observe
 from traitlets import Unicode, DottedObjectName
@@ -32,8 +33,12 @@ from yuuno.core.extension import Extension
 from yuuno.core.registry import Registry
 
 from yuuno.vs.utils import get_proxy_or_core, is_version
-from yuuno.vs.utils import MessageLevel
+from yuuno.vs.utils import MessageLevel, is_single
 from yuuno.vs.alpha import AlphaOutputClip
+
+
+if TYPE_CHECKING:
+    from yuuno.multi_scripts.extension import MultiScriptExtension
 
 
 class VapourSynth(Extension):
@@ -151,30 +156,63 @@ Settings to a value less than one makes it default to the number of hardware thr
 
     @property
     def can_hook_log(self):
-        import vapoursynth
-        return self.hook_messages and not vapoursynth._using_vsscript
+        return self.hook_messages and is_single()
 
-    def initialize(self):
-        self.parent.registry.add_subregistry(self.registry)
-
+    @property
+    def can_mutli_env_natively(self):
+        """
+        Yuuno's Multi-Environment-Feature assumes that it is threadsafe
+        to use multiple environments.
+        """
         import vapoursynth
+        return hasattr(vapoursynth, 'vpy_current_environment')
+
+    def initialize_hook(self, vapoursynth):
         if self.can_hook_log:
             vapoursynth.set_message_handler(self._on_vs_log)
         elif self.hook_messages:
             self.parent.log.debug("vsscript-Environment detected. Skipping hook on message-handler.")
-        core = get_proxy_or_core()
 
+    def initialize_namespace(self, vapoursynth):
+        core = get_proxy_or_core()
         self.parent.namespace['vs'] = vapoursynth
         self.parent.namespace['core'] = core
 
-        self.update_core_values()
+    def initialize_multi_script(self):
+        managers: Optional['MultiScriptExtension'] = self.parent.get_extension('MultiScript')
+        if managers is None:
+            self.parent.log.debug("MultiScript not found. Skipping VSScript.")
+            return
+
+        # Check support for vapoursynth/#389 at R44
+        if not self.can_mutli_env_natively:
+            self.parent.log.warn("VSScript is unstable in the currently installed version of VapourSynth.")
+            return
+
+        self.parent.log.debug("Enabling VSScript.")
+        from yuuno.vs.vsscript.script import VSScriptManager
+        self.script_manager = VSScriptManager()
+        managers.register_manager('VSScript', self.script_manager)
+        self.parent.log.debug("VSScript enabled.")
+
+    def initialize(self):
+        import vapoursynth
+        self.parent.registry.add_subregistry(self.registry)
+        self.initialize_hook(vapoursynth)
+        self.initialize_namespace(vapoursynth)
+        self.initialize_multi_script()
+
+        if self.parent.get_extension('MultiScript') is None:
+            self.update_core_values()
 
     def deinitialize(self):
         self.parent.registry.remove_subregistry(self.registry)
-
         del self.parent.namespace['vs']
         del self.parent.namespace['core']
 
         if self.can_hook_log:
             import vapoursynth
             vapoursynth.set_message_handler(None)
+
+        if self.can_mutli_env_natively:
+            self.script_manager.disable()
