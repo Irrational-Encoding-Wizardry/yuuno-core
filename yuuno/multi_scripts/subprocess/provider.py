@@ -45,7 +45,7 @@ class ScriptProvider(object):
         """
         pass
 
-    def get_script(self) -> Script:
+    def get_script(self) -> 'Script':
         """
         Returns the script.
         """
@@ -63,10 +63,14 @@ class ManagedScriptProvider(ScriptProvider):
         super(ManagedScriptProvider, self).__init__(self, yuuno, **kwargs)
         self.manager_name = manager_name
         self.manager = None
+        self.script = None
 
     def initialize(self) -> None:
         mscr = self.yuuno.get_extension('MultiScript')
         self.manager = mscr.get_manager(self.manager_name)
         if self.manager is None:
             raise ValueError("Unknown Script Manager detected.")
-        
+        self.script = self.manager.create('subprocess')
+
+    def get_script(self) -> 'Script':
+        return self.script

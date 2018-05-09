@@ -24,6 +24,6 @@ __all__ = ["popen", "interrupt_process"]
 
 
 if sys.platform == "win32":
-    from yuuno_ipython.ipy_vs.os.win32 import popen, interrupt_process
+    from yuuno.multi_scripts.os.win32 import popen, interrupt_process
 else:
-    from yuuno_ipython.ipy_vs.os.unix import popen, interrupt_process
+    from yuuno.multi_scripts.os.unix import popen, interrupt_process
