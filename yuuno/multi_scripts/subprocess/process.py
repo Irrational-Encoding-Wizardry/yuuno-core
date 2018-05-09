@@ -21,36 +21,97 @@ import subprocess
 from base64 import b64decode, b64encode
 from multiprocessing import Connection, Pipe
 
+from traitlets.utils.importstring import import_item
+from traitlets import Instance
+
 from yuuno.core.environment import Environment
 from yuuno.multi_scripts.script import Script
+from yuuno.multi_scripts.subprocess.provider import ScriptProviderInfo, ScriptProvider
+
 
 class LocalSubprocessEnvironment(Environment):
     """
     
     """
-    _additional_extensions = []
-    _script_provider_module = None
+    _provider_meta: ScriptProviderInfo
+
+    write: Connection = Instance(Connection)
+    read: Connection = Instance(Connection)
+    provider: ScriptProvider = Instance(ScriptProvider)
+
+
+    def additional_extensions(self) -> List[str]:
+        """
+        Defines additional extensions that should be
+        loaded inside the environment
+        """
+        result = []
+
+        for ext in self._provider_meta.extensions:
+            if not ext.startswith("="):
+                ext = "="+ext
+
+            name, extension = [s.strip() for s in ext.split("=")]
+            extension = import_item(extension)
+
+            if name:
+                extension._name = name
+            result.append(extension)
+
+        return result
+
+    def post_extension_load(self) -> None:
+        """
+        Called directly after extensions have been loaded
+        (but not enabled)
+        """
+
+        # Let's initialize it here.
+        provider_class = import_item(self._provider_meta.providercls)
+        self.provider = provider_class(**self._provider_meta.providerparams)
+
+    def initialize(self) -> None:
+        """
+        Called by yuuno to tell it that yuuno has
+        initialized to the point that it can now initialize
+        interoperability for the given environment.
+        """
+        self.provider.initialize()
+
+    def run(self):
+        """
+        Wait for commands.
+        """
+
+    def deinitialize(self) -> None:
+        """
+        Called by yuuno before it deconfigures itself.
+        """
+        self.provider.deinitialize()
 
     @classmethod
     def main(self, argv):
         # Parse args
-        read = b64decode(argv[1])
-        write = b64decode(argv[2])
+        read: Connection = pickle.loads(b64decode(argv[1]))
+        write: Connection = pickle.loads(b64decode(argv[2]))
 
+        # 
         from yuuno import Yuuno
         yuuno = Yuuno.instance(parent=None)
         env = cls(parent=yuuno, read=read, write=write)
         yuuno.environment = env
 
-        
-        
+        # Wait for the ProviderMeta to be set. (Zygote initialize)
+        env._provider_meta = read.recv()
+        yuuno.start()
 
 
 class Subprocess(Script):
 
     def __init__(self):
         self.process: subprocess.Popen = None
-        self.read, self.write = Pipe(duplex=True)
+        self.self_read, self.self_write = Pipe(duplex=False)
+        self.child_read, self.child_write = Pipe(duplex=False)
 
     @property
     def alive(self) -> bool:
@@ -64,8 +125,10 @@ class Subprocess(Script):
         if __name__ == "__main__":
             modname = [__file__]
 
-        b64read_remote = b64encode(pickle.dumps(self.write))
-        b64write_remote = b64encode(pickle.dumps(self.read))
+        b64read_remote = b64encode(pickle.dumps(self.self_read))
+        b64write_remote = b64encode(pickle.dumps(self.child_write))
+        self.self_read.close()
+        self.child_write.close()
 
         self.process = subprocess.Popen(
             [sys.executable] + modname + [b64read_remote, b64write_remote]
@@ -73,3 +136,4 @@ class Subprocess(Script):
 
 
 if __name__ == "__main__":
+    

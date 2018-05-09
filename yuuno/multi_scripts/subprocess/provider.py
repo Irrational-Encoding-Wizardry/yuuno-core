@@ -28,7 +28,6 @@ class ScriptProviderInfo(NamedTuple):
     extensions: List[str]
 
 
-
 class ScriptProvider(object):
     """
     Provider for single scripts.
@@ -42,6 +41,12 @@ class ScriptProvider(object):
         """
         Called after _all_ extensions have been loaded
         and the system is ready to be loaded.
+        """
+        pass
+
+    def deinitialize(self) -> None:
+        """
+        Called when the environment is being disabled.
         """
         pass
 
