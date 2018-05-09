@@ -67,14 +67,20 @@ class ScriptEnvironment(object):
         enable_vsscript()
         self.filename = filename
         self.id = _script_counter()
-        self.export = VPYScriptExport()
-        self.export.pyenvdict = {}
-        self.export.id = self.id
+        self.export = None
         if VapourSynthCAPI.vpy_createScript(self._handle):
             self._raise_error()
 
         self._core = None
         self._outputs = None
+
+    def enable(self):
+        if self.export is not None:
+            return
+            
+        self.export = VPYScriptExport()
+        self.export.pyenvdict = {}
+        self.export.id = self.id
 
     @property
     def _handle(self):

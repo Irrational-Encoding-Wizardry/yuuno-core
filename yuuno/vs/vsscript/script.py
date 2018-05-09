@@ -27,7 +27,7 @@ from yuuno.vs.vsscript.containermodule import create_module
 from yuuno.vs.vsscript.vs_capi import ScriptEnvironment
 from yuuno.vs.vsscript.vs_capi import enable_vsscript, disable_vsscript
 from yuuno.vs.vsscript.clip import WrappedClip
-from yuuno.vs.utils import inline_resolved
+from yuuno.vs.utils import inline_resolved, is_single
 
 
 class VSScript(Script):
@@ -48,7 +48,10 @@ class VSScript(Script):
         """
         Checks if the environment is still alive.
         """
-        return self.env.alive
+        return self.env is not None and self.env.alive
+
+    def initialize(self) -> None:
+        self.env.enable()
 
     def _invoke_exec_counter(self):
         self.exec_counter += 1
@@ -94,8 +97,7 @@ class VSScript(Script):
 class VSScriptManager(ScriptManager):
 
     def __init__(self):
-        enable_vsscript()
-
+        self._does_manage_vsscript = False
         self.envs: Dict[int, VSScript] = {}
         self.scripts: Dict[str, VSScript] = {}
         create_module(self._select_current_dict)
@@ -128,11 +130,23 @@ class VSScriptManager(ScriptManager):
             return WrappedClip(current_env, cls(*args, **kwargs))
         return _wrapper
 
-    def create(self, name: str) -> Script:
+    def create(self, name: str, *, initialize=False) -> Script:
         """
         Creates a new script environment.
         """
-        return VSScript(self, name)
+        if is_single():
+            enable_vsscript()
+            self._does_manage_vsscript = True
+        
+        # Make sure we have full control of VSScriptö
+        elif self._does_manage_vsscript:
+            raise RuntimeError("The script manager does not control VSScript.")
+
+        # Create the core now.
+        script = VSScript(self, name)
+        if initialize:
+            script.initialize()
+        return script
 
     def get(self, name: str) -> Optional[Script]:
         """
@@ -151,5 +165,7 @@ class VSScriptManager(ScriptManager):
         """
         Disposes all scripts and tries to clean up.
         """
-        disable_vsscript()
+        if self._does_manage_vsscript:
+            disable_vsscript()
+            self._does_manage_vsscript = False
         self.dispose_all()

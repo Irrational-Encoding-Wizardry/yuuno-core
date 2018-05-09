@@ -34,6 +34,15 @@ class Script(object):
         """
         return False
 
+    def initialize(self) -> None:
+        """
+        Called when the script is going to be
+        initialized.
+
+        We need this to find out if script-creation
+        is actually costly.
+        """
+
     def dispose(self) -> None:
         """
         Disposes the script.
@@ -59,7 +68,7 @@ class ScriptManager(object):
     Manages and creates script-environments.
     """
 
-    def create(self, name: str) -> Script:
+    def create(self, name: str, *, initialize=True) -> Script:
         """
         Creates a new script environment.
         """
