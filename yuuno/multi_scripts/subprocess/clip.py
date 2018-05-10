@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 from PIL.Image import Image, frombytes, merge
 
 from yuuno.clip import Clip, Frame, Size, RawFormat
-from yuuno.utils import future_yield_coro, auto_join, inline_resolved
+from yuuno.utils import future_yield_coro, auto_join, inline_resolved, gather
 
 if TYPE_CHECKING:
     from yuuno.multi_scripts.subprocess.process import Subprocess
@@ -29,9 +29,8 @@ class ProxyFrame(Frame):
         self._cached_meta = None
         self._cached_raw = None
 
-    @auto_join
     @future_yield_coro
-    def _meta(self) -> Tuple[Size, RawFormat]:
+    def _meta(self):
         if self._cached_meta is None:
             self._cached_meta = yield self.script.requester.submit('script/subprocess/results/meta', {
                 "id": self.clip,
@@ -40,14 +39,13 @@ class ProxyFrame(Frame):
         return self._cached_meta
 
     def size(self) -> Size:
-        return self._meta()[0]
+        return self._meta().result()[0]
 
     def format(self) -> RawFormat:
-        return self._meta()[1]
+        return self._meta().result()[1]
 
-    @auto_join
     @future_yield_coro
-    def to_raw(self) -> bytes:
+    def _raw_async(self) -> bytes:
         if self._cached_raw is None:
             self._cached_raw = yield self.script.requester.submit('script/subprocess/results/raw', {
                 "id": self.clip,
@@ -55,13 +53,16 @@ class ProxyFrame(Frame):
             })
         return self._cached_raw
 
+    def to_raw(self) -> bytes:
+        return self._raw_async().result()
+
+    @auto_join
+    @future_yield_coro
     def to_pil(self):
         if self._cached_img is not None:
             return self._cached_img
 
-        format = self.format()
-        size = self.size()
-        raw = self.to_raw()
+        size, format, raw = yield self.get_raw_data_async()
 
         index = 0
         planes = []
@@ -75,6 +76,11 @@ class ProxyFrame(Frame):
         if format.num_planes == 4:
             pil_format += "A"
         return merge(pil_format, planes)
+
+    @future_yield_coro
+    def get_raw_data_async(self) -> Tuple[Size, RawFormat, bytes]:
+        m, raw = yield gather([self._meta(), self._raw_async()])
+        return m[0], m[1], raw
 
 
 class ProxyClip(Clip):
