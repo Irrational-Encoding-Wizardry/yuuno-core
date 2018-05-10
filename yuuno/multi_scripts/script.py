@@ -68,7 +68,7 @@ class ScriptManager(object):
     Manages and creates script-environments.
     """
 
-    def create(self, name: str, *, initialize=True) -> Script:
+    def create(self, name: str, *, initialize=False) -> Script:
         """
         Creates a new script environment.
         """

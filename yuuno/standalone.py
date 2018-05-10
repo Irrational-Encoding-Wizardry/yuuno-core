@@ -9,6 +9,6 @@ class StandaloneEnvironment(Environment):
 def init_standalone(*, additional_extensions=()) -> Yuuno:
     y = Yuuno.instance(parent=None)
     y.environment = StandaloneEnvironment()
-    y.environment.additional_extensions = lambda: additional_extensions
+    y.environment.additional_extensions = lambda: list(additional_extensions)
     y.start()
     return y

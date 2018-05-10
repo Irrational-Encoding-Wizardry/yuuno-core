@@ -15,16 +15,18 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import sys
 import pickle
 import functools
 import subprocess
-from queue import Queue, Empty
-from threading import Event
-from concurrent.futures import Future
-from base64 import b64decode, b64encode
-from multiprocessing import Connection, Pipe
 from pathlib import Path
+from threading import Event
+from queue import Queue, Empty
+from concurrent.futures import Future
+
+from multiprocessing import Pipe, Pool, Process
+from multiprocessing.connection import Connection
+from multiprocessing.context import BaseContext as Context
+
 
 from typing import List, Callable, Any, NamedTuple, Sequence, Dict, Union
 from typing import TYPE_CHECKING
@@ -57,8 +59,8 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
     """
     _provider_meta: ScriptProviderInfo
 
-    write: Connection = Instance(Connection)
-    read: Connection = Instance(Connection)
+    write: Connection
+    read: Connection
     provider: ScriptProvider = Instance(ScriptProvider)
 
     queue: Queue
@@ -99,7 +101,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         # Let's initialize it here.
         provider_class = import_item(self._provider_meta.providercls)
 
-        self.provider = provider_class(**self._provider_meta.providerparams)
+        self.provider = provider_class(self.parent, **self._provider_meta.providerparams)
 
     def _wrap2queue(self, unwrapped: Callable[[Any], Any]) -> Callable[[Any], Future]:
         @functools.wraps(unwrapped)
@@ -115,7 +117,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         initialized to the point that it can now initialize
         interoperability for the given environment.
         """
-        self.provider.initialize()
+        self.provider.initialize(self)
 
     def run(self):
         """
@@ -182,37 +184,26 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         # Stop Yuuno.
         yuuno.stop()
 
-    @classmethod
-    def main(cls, argv):
-        """
-        Simple main method.
-
-        :param argv:
-        :return:
-        """
-        # Parse args
-        read: Connection = pickle.loads(b64decode(argv[1]))
-        write: Connection = pickle.loads(b64decode(argv[2]))
-        cls.execute(read, write)
-
 
 class Subprocess(Script):
 
-    process: subprocess.Popen
+    process: Process
     self_read: Connection
     self_write: Connection
     child_read: Connection
     child_write: Connection
     requester: Requester
+    pool: Pool
     provider_info: ScriptProviderInfo
 
     running: bool
 
-    def __init__(self, provider_info: ScriptProviderInfo):
+    def __init__(self, pool: Pool, provider_info: ScriptProviderInfo):
         self.process = None
+        self.pool = pool
         self.self_read, self.self_write = Pipe(duplex=False)
         self.child_read, self.child_write = Pipe(duplex=False)
-        self.requester = Requester(self.self_write, self.child_read)
+        self.requester = Requester(self.child_read, self.self_write)
 
         self.provider_info = provider_info
 
@@ -220,22 +211,15 @@ class Subprocess(Script):
         self.running = False
 
     def _create(self):
-        modname = ['-m', __name__]
-        if __name__ == "__main__":
-            modname = [__file__]
-
-        b64read_remote = b64encode(pickle.dumps(self.self_read))
-        b64write_remote = b64encode(pickle.dumps(self.child_write))
-        self.self_read.close()
-        self.child_write.close()
-
-        self.process = subprocess.Popen(
-            [sys.executable] + modname + [b64read_remote, b64write_remote]
+        self.process = self.pool.Process(
+            target=LocalSubprocessEnvironment.execute,
+            args=(self.self_read, self.child_write)
         )
+        self.process.start()
 
     @property
     def alive(self) -> bool:
-        return self.running and self.process.poll() is not None
+        return self.running and self.process.is_alive()
 
     def initialize(self):
         if self.alive:
@@ -256,6 +240,14 @@ class Subprocess(Script):
         """
         if not self.alive:
             return
+        self.requester.stop()
+        self.requester.join()
+
+        self.child_write.close()
+        self.child_read.close()
+        self.self_write.close()
+        self.self_read.close()
+
         self.process.terminate()
 
     def __del__(self):
@@ -269,7 +261,7 @@ class Subprocess(Script):
         """
 
         indexes = yield self.requester.submit("script/subprocess/results", {})
-        return {index: ProxyClip(index, self) for index in indexes}
+        return {index: ProxyClip(index.name, index.length, self) for index in indexes}
 
     def execute(self, code: Union[str, Path]) -> Future:
         """
@@ -280,6 +272,3 @@ class Subprocess(Script):
             "code": str(code)
         })
 
-
-if __name__ == "__main__":
-    LocalSubprocessEnvironment.main(sys.argv)

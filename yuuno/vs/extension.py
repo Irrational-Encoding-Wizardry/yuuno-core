@@ -22,7 +22,7 @@ from typing import List as TList, Optional
 
 from traitlets import observe
 from traitlets import Unicode, DottedObjectName
-from traitlets import Instance, default
+from traitlets import default
 from traitlets import CInt, CBool
 from traitlets import Union
 from traitlets import List
@@ -35,6 +35,8 @@ from yuuno.core.registry import Registry
 from yuuno.vs.utils import get_proxy_or_core
 from yuuno.vs.utils import MessageLevel, is_single
 from yuuno.vs.alpha import AlphaOutputClip
+
+from yuuno.multi_scripts.subprocess.provider import ScriptProviderRegistration
 
 
 if TYPE_CHECKING:
@@ -185,13 +187,17 @@ Settings to a value less than one makes it default to the number of hardware thr
 
         self.parent.registry.add_subregistry(self.registry)
 
-
     def initialize_multi_script(self):
         self.script_manager = None
         managers: Optional['MultiScriptExtension'] = self.parent.get_extension('MultiScript')
         if managers is None:
             self.parent.log.debug("MultiScript not found. Skipping VSScript.")
             return
+
+        managers.register_provider('vapoursynth', ScriptProviderRegistration(
+            providercls="yuuno.vs.provider.VSScriptProvider",
+            extensions=[]
+        ))
 
         # Check support for vapoursynth/#389 at R44
         if not self.can_mutli_env_natively:
@@ -224,5 +230,5 @@ Settings to a value less than one makes it default to the number of hardware thr
             import vapoursynth
             vapoursynth.set_message_handler(None)
 
-        if self.can_mutli_env_natively:
+        if self.can_mutli_env_natively and self.script_manager is not None:
             self.script_manager.disable()

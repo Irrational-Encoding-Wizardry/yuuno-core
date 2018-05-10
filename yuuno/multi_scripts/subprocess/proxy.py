@@ -15,7 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from multiprocessing import Connection
+from multiprocessing.connection import Connection
 from threading import Thread, Lock, Event
 from typing import Mapping, Optional, Any, Callable, Union
 from typing import NamedTuple
