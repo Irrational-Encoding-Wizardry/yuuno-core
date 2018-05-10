@@ -68,7 +68,7 @@ class ProxyFrame(Frame):
         for i in range(format.num_planes):
             plane = self.plane_size(i)
             planedata = raw[index:index+plane]
-            planes.append(frombytes('L', size, planedata, 'raw', "L", 0, -1))
+            planes.append(frombytes('L', size, planedata, 'raw', "L"))
             index += plane
 
         pil_format = "RGB"
