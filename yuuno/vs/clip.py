@@ -15,10 +15,9 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
 import ctypes
-from typing import Tuple
+from typing import Tuple, overload
+from concurrent.futures import Future
 
 from PIL import Image
 from traitlets import HasTraits, Instance, observe
@@ -27,7 +26,8 @@ import vapoursynth as vs
 from vapoursynth import VideoNode, VideoFrame
 
 from yuuno import Yuuno
-from yuuno.clip import Clip, Frame
+from yuuno.utils import future_yield_coro, gather
+from yuuno.clip import Frame, Size, RawFormat
 from yuuno.vs.extension import VapourSynth
 from yuuno.vs.utils import get_proxy_or_core, is_single
 from yuuno.vs.alpha import AlphaOutputClip
@@ -47,8 +47,11 @@ def calculate_size(frame: VideoFrame, planeno: int) -> Tuple[int, int]:
         height >>= frame.format.subsampling_h
     return width, height
 
-
-def extract_plane_r36compat(frame: VideoFrame, planeno: int, *, compat: bool=False , direction: int = -1) -> Image.Image:
+@overload
+def extract_plane_r36compat(frame: VideoFrame, planeno: int, *, compat: bool=False , direction: int = -1, raw=True) -> bytes: pass
+@overload
+def extract_plane_r36compat(frame: VideoFrame, planeno: int, *, compat: bool=False, direction: int = -1, raw=False) -> Image.Image: pass
+def extract_plane_r36compat(frame, planeno, *, compat=False, direction=-1, raw=False):
     """
     Extracts the plane using the old VapourSynth API for reading a frame.
 
@@ -62,6 +65,7 @@ def extract_plane_r36compat(frame: VideoFrame, planeno: int, *, compat: bool=Fal
     :param planeno:   The plane number
     :param compat:    Are we dealing with a compat format.
     :param direction: -1 bottom to top, 1 top to bottom
+    :param raw:       Return bytes instead of an image.
     :return: The extracted image.
     """
     width, height = calculate_size(frame, planeno)
@@ -69,13 +73,19 @@ def extract_plane_r36compat(frame: VideoFrame, planeno: int, *, compat: bool=Fal
     s_plane = height * stride
     buf = (ctypes.c_byte*s_plane).from_address(frame.get_read_ptr(planeno).value)
 
-    if not compat:
-        return Image.frombuffer('L', (width, height), buf, "raw", "L", stride, direction)
+    if raw:
+        return bytes(buf)
     else:
-        return Image.frombuffer('RGB', (width, height), buf, "raw", "BGRX", stride, direction)
+        if not compat:
+            return Image.frombuffer('L', (width, height), buf, "raw", "L", stride, direction)
+        else:
+            return Image.frombuffer('RGB', (width, height), buf, "raw", "BGRX", stride, direction)
 
-
-def extract_plane_new(frame: VideoFrame, planeno: int, *, compat: bool=False, direction: int = -1) -> Image.Image:
+@overload
+def extract_plane_new(frame: VideoFrame, planeno: int, *, compat: bool=False , direction: int = -1, raw=True) -> bytes: pass
+@overload
+def extract_plane_new(frame: VideoFrame, planeno: int, *, compat: bool=False, direction: int = -1, raw=False) -> Image.Image: pass
+def extract_plane_new(frame, planeno, *, compat=False, direction=-1, raw=False):
     """
     Extracts the plane with the VapourSynth R37+ array-API.
 
@@ -83,19 +93,26 @@ def extract_plane_new(frame: VideoFrame, planeno: int, *, compat: bool=False, di
     :param planeno:   The plane number
     :param compat:    Are we dealing with a compat format.
     :param direction: -1 bottom to top, 1 top to bottom
+    :param raw:       Return bytes instead of an image.
     :return: The extracted image.
     """
     arr = frame.get_read_array(planeno)
     height, width = arr.shape
     stride = frame.format.bytes_per_sample * width
 
-    if not compat:
-        return Image.frombuffer('L', (width, height), bytes(arr), "raw", "L", stride, direction)
+    if raw:
+        return bytes(arr)
     else:
-        return Image.frombuffer('RGB', (width, height), bytes(arr), "raw", "BGRX", stride, direction)
+        if not compat:
+            return Image.frombuffer('L', (width, height), bytes(arr), "raw", "L", stride, direction)
+        else:
+            return Image.frombuffer('RGB', (width, height), bytes(arr), "raw", "BGRX", stride, direction)
 
-
-def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False, direction: int = -1) -> Image.Image:
+@overload
+def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False , direction: int = -1, raw=True) -> bytes: pass
+@overload
+def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False, direction: int = -1, raw=False) -> Image.Image: pass
+def extract_plane(frame, planeno, *, compat=False, direction=-1, raw=False):
     """
     Extracts the plane.
 
@@ -105,12 +122,14 @@ def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False, direct
     :param frame:   The frame
     :param planeno: The plane number
     :param compat:  Are we dealing with a compat format.
+    :param direction: -1 bottom to top, 1 top to bottom
+    :param raw:       Return bytes instead of an image.
     :return: The extracted image.
     """
     if hasattr(VideoFrame, 'get_read_array'):
-        return extract_plane_new(frame, planeno, compat=compat, direction=direction)
+        return extract_plane_new(frame, planeno, compat=compat, direction=direction, raw=raw)
     else:
-        return extract_plane_r36compat(frame, planeno, compat=compat, direction=direction)
+        return extract_plane_r36compat(frame, planeno, compat=compat, direction=direction, raw=raw)
 
 
 class VapourSynthFrameWrapper(HasTraits, Frame):
@@ -118,9 +137,14 @@ class VapourSynthFrameWrapper(HasTraits, Frame):
     pil_cache: Image.Image = Instance(Image.Image, allow_none=True)
 
     frame: VideoFrame = Instance(VideoFrame)
+    rgb_frame: VideoFrame = Instance(VideoFrame)
     compat_frame: VideoFrame = Instance(VideoFrame)
 
-    def _extract(self) -> Image.Image:
+    @property
+    def extension(self) -> VapourSynth:
+        return Yuuno.instance().get_extension(VapourSynth)
+
+    def _extract(self):
         self.pil_cache = extract_plane(self.compat_frame, 0, compat=True)
 
     def to_pil(self) -> Image.Image:
@@ -129,8 +153,48 @@ class VapourSynthFrameWrapper(HasTraits, Frame):
         # noinspection PyTypeChecker
         return self.pil_cache
 
+    def size(self) -> Size:
+        return Size(self.frame.width, self.frame.height)
+
+    def format(self) -> RawFormat:
+        if self.extension.raw_force_compat:
+            frame = self.compat_frame
+        else:
+            frame = self.frame
+
+        ff: vs.Format = frame.format
+        samples = RawFormat.SampleType.INTEGER if ff.sample_type==vs.INTEGER else RawFormat.SampleType.FLOAT
+        fam = {
+            vs.RGB: RawFormat.ColorFamily.RGB,
+            vs.GRAY: RawFormat.ColorFamily.GREY,
+            vs.YUV: RawFormat.ColorFamily.YUV,
+            vs.YCOCG: RawFormat.ColorFamily.YUV
+        }[ff.color_family]
+
+        return RawFormat(
+            sample_type=samples,
+            family=fam,
+            num_planes=ff.num_planes,
+            subsampling_w=ff.subsampling_w,
+            subsampling_h=ff.subsampling_h,
+            bits_per_sample=ff.bits_per_sample
+        )
+
+    def to_raw(self):
+        if self.extension.raw_force_compat:
+            frame = self.compat_frame
+        else:
+            frame = self.frame
+
+        return b"".join(
+            extract_plane(frame, i, compat=False, raw=True)
+            for i in range(frame.format.num_planes)
+        )
+
 
 class VapourSynthClipMixin(HasTraits):
+
+    clip: VideoNode
 
     @property
     def extension(self) -> VapourSynth:
@@ -151,33 +215,45 @@ class VapourSynthClipMixin(HasTraits):
 
         return bc.std.ModifyFrame([bc], lambda n, f: frame.copy())
 
-    def _to_compat_rgb32(self, clip: VideoNode):
+    def _to_rgb32(self, clip: VideoNode) -> VideoNode:
         if clip.format.color_family == vs.YUV:
             clip = self.extension.resize_filter(clip, format=vs.RGB24, matrix_in_s=self.extension.yuv_matrix)
 
         if clip.format.color_family != vs.RGB or clip.format.bits_per_sample != 8:
             clip = self.extension.resize_filter(clip, format=vs.RGB24)
 
-        return self.extension.resize_filter(clip, format=vs.COMPATBGR32)
+        return clip
+
+    def to_rgb32(self, frame: VideoFrame) -> VideoNode:
+        clip = self._wrap_frame(frame)
+        return self._to_rgb32(clip)
 
     def to_compat_rgb32(self, frame: VideoFrame) -> VideoNode:
-        clip = self._wrap_frame(frame)
-        return self._to_compat_rgb32(clip)
+        return self.extension.resize_filter(self.to_rgb32(frame), format=vs.COMPATBGR32)
 
     def __len__(self):
         return len(self.clip)
 
+    @future_yield_coro
     def __getitem__(self, item) -> VapourSynthFrameWrapper:
-        frame: VideoFrame = self.clip.get_frame(item)
-        compat: VideoNode = self.to_compat_rgb32(frame)
-
         if not is_single():
             try:
                 get_proxy_or_core().std.BlankClip(self.clip)
             except vs.Error:
-                raise RuntimeError("Tried to access clip of a dead core.")
+                raise RuntimeError("Tried to access clip of a dead core.") from None
 
-        return VapourSynthFrameWrapper(frame=frame, compat_frame=compat.get_frame(0))
+        frame = yield self.clip.get_frame_async(item)
+        rgb24: Future = self.to_rgb32(frame).get_frame_async(0)
+        compat: Future = self.to_compat_rgb32(frame).get_frame_async(0)
+
+        (yield gather([rgb24, compat]))
+        rgb24_frame, compat_frame = rgb24.result(), compat.result()
+
+        return VapourSynthFrameWrapper(
+            frame=frame,
+            compat_frame=compat_frame,
+            rgb_frame=rgb24_frame
+        )
 
 
 class VapourSynthClip(VapourSynthClipMixin, HasTraits):
@@ -219,6 +295,23 @@ class VapourSynthAlphaFrameWrapper(HasTraits):
             self._cache = color
         return self._cache
 
+    def size(self) -> Size:
+        return self.clip.size()
+
+    def format(self) -> RawFormat:
+        f = self.clip.format()
+        return RawFormat(
+            bits_per_sample=f.bits_per_sample,
+            family=f.family,
+            num_planes=f.num_planes+1,
+            subsampling_h=f.subsampling_h,
+            subsampling_w=f.subsampling_w,
+            sample_type=f.sample_type
+        )
+
+    def to_raw(self):
+        return b"".join([self.clip.to_raw(), self.alpha.to_raw()])
+
 
 class VapourSynthAlphaClip:
 
@@ -237,7 +330,11 @@ class VapourSynthAlphaClip:
             return len(self.clip)
         return min(map(len, (self.clip, self.alpha)))
 
+    @future_yield_coro
     def __getitem__(self, item):
         if self.alpha is None:
-            return self.clip[item]
-        return VapourSynthAlphaFrameWrapper(clip=self.clip[item], alpha=self.alpha[item])
+            return (yield self.clip[item])
+
+        f1 = yield self.clip[item]
+        f2 = yield self.alpha[item]
+        return VapourSynthAlphaFrameWrapper(clip=f1, alpha=f2)

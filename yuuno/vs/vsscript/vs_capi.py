@@ -63,24 +63,29 @@ def _perform_in_environment(func):
 
 
 class ScriptEnvironment(object):
+    __slots__ = ('filename', 'id', 'export', '_core', '_outputs', '_env')
+
     def __init__(self, filename=None):
         enable_vsscript()
         self.filename = filename
         self.id = _script_counter()
         self.export = None
-        if VapourSynthCAPI.vpy_createScript(self._handle):
-            self._raise_error()
-
         self._core = None
         self._outputs = None
+        self._env = None
 
     def enable(self):
         if self.export is not None:
             return
-            
+
         self.export = VPYScriptExport()
         self.export.pyenvdict = {}
         self.export.id = self.id
+
+        if VapourSynthCAPI.vpy_createScript(self._handle):
+            self._raise_error()
+
+        self._env = self._perform_raw(vapoursynth.vpy_current_environment)
 
     @property
     def _handle(self):
@@ -101,7 +106,7 @@ class ScriptEnvironment(object):
     def _raise_error(self):
         raise vapoursynth.Error(VapourSynthCAPI.vpy_getError(self._handle).decode('utf-8'))
 
-    def perform(self, func, counter=None):
+    def _perform_raw(self, func, counter=None):
         if self.export is None:
             raise vapoursynth.Error("Tried to access dead core.")
 
@@ -136,6 +141,10 @@ class ScriptEnvironment(object):
             raise error
         return result
 
+    def perform(self, func):
+        with self._env:
+            return func()
+
     def exec(self, code):
         counter = _run_counter()
         compiled = compile(code, '<Yuuno %r:%d>' % (self.filename, counter), 'exec')
@@ -143,7 +152,7 @@ class ScriptEnvironment(object):
         def _exec():
             exec(compiled, self.export.pyenvdict, {})
 
-        self.perform(_exec, counter)
+        self._perform_raw(_exec, counter)
 
     @_perform_in_environment
     def _get_core(self):

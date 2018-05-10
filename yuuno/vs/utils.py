@@ -17,29 +17,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import enum
 import types
-import functools
-from typing import AnyStr, Callable, TypeVar
-from concurrent.futures import Future
+from typing import AnyStr, Callable
 
 from traitlets.utils.importstring import import_item
-
-
-T = TypeVar("T")
-
-
-def inline_resolved(func: Callable[..., T]) -> Callable[..., Future]:
-    @functools.wraps(func)
-    def _wrapped(*args, **kwargs) -> Future:
-        fut = Future()
-        fut.set_running_or_notify_cancel()
-        try:
-            result_value = func(*args, **kwargs)
-        except Exception as e:
-            fut.set_exception(e)
-        else:
-            fut.set_result(result_value)
-        return fut
-    return _wrapped
 
 
 def get_proxy_or_core(*, resolve_proxy=False):

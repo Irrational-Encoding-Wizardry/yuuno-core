@@ -38,6 +38,7 @@ from yuuno.vs.alpha import AlphaOutputClip
 
 
 if TYPE_CHECKING:
+    import vapoursynth as vs
     from yuuno.multi_scripts.extension import MultiScriptExtension
 
 
@@ -75,6 +76,7 @@ Settings to a value less than one makes it default to the number of hardware thr
     core_max_cache_size: int = CBool(None, allow_none=True, help="Set the upper framebuffer cache size after which memory is aggressively freed. The value is in mediabytes.", config=True)
 
     vsscript_environment_wrap: bool = CBool(True, help="Allow Yuuno to automatically . Do not disable while running multiple cores at once.", config=True)
+    raw_force_compat: bool = CBool(True, "In raw image exports, force Planar RGB output", config=True)
 
     log_handlers: TList[TCallable[[int, str], None]] = List(Callable())
 
@@ -106,29 +108,6 @@ Settings to a value less than one makes it default to the number of hardware thr
     _observe_accept_lowercase = observe("core_accept_lowercase")(_update_core_values("accept_lowercase"))
     _observe_max_cache_size   = observe("core_max_cache_size")(_update_core_values("max_cache_size"))
 
-    def initialize_registry(self):
-        self.parent.log.debug("Registering wrappers.")
-        import vapoursynth
-        from vapoursynth import VideoNode, VideoFrame
-        from yuuno.vs.clip import VapourSynthClip, VapourSynthFrame
-        from yuuno.vs.clip import VapourSynthAlphaClip
-
-        # Detected VSScript.
-        wrapperfunc = lambda cls: cls
-        if self.script_manager is not None and self.vsscript_environment_wrap:
-            wrapperfunc = self.script_manager.env_wrapper_for
-
-        self.registry = Registry()
-        self.registry.register(wrapperfunc(VapourSynthClip), VideoNode)
-        self.registry.register(wrapperfunc(VapourSynthFrame), VideoFrame)
-        self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputClip)
-        if hasattr(vapoursynth, 'AlphaOutputTuple'):
-            # Required so that IPython automatically supports alpha outputs
-            from vapoursynth import AlphaOutputTuple
-            self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputTuple)
-
-        self.parent.registry.add_subregistry(self.registry)
-
     @classmethod
     def is_supported(cls):
         try:
@@ -139,7 +118,7 @@ Settings to a value less than one makes it default to the number of hardware thr
         return hasattr(vapoursynth, 'construct_signature')
 
     @property
-    def resize_filter(self) -> TCallable:
+    def resize_filter(self) -> TCallable[['vs.VideoNode', 'int'], 'vs.VideoNode']:
         """
         Loads the resize-filter for any image operations.
 
@@ -182,6 +161,30 @@ Settings to a value less than one makes it default to the number of hardware thr
         core = get_proxy_or_core()
         self.parent.namespace['vs'] = vapoursynth
         self.parent.namespace['core'] = core
+
+    def initialize_registry(self):
+        self.parent.log.debug("Registering wrappers.")
+        import vapoursynth
+        from vapoursynth import VideoNode, VideoFrame
+        from yuuno.vs.clip import VapourSynthClip, VapourSynthFrame
+        from yuuno.vs.clip import VapourSynthAlphaClip
+
+        # Detected VSScript.
+        wrapperfunc = lambda cls: cls
+        if self.script_manager is not None and self.vsscript_environment_wrap:
+            wrapperfunc = self.script_manager.env_wrapper_for
+
+        self.registry = Registry()
+        self.registry.register(wrapperfunc(VapourSynthClip), VideoNode)
+        self.registry.register(wrapperfunc(VapourSynthFrame), VideoFrame)
+        self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputClip)
+        if hasattr(vapoursynth, 'AlphaOutputTuple'):
+            # Required so that IPython automatically supports alpha outputs
+            from vapoursynth import AlphaOutputTuple
+            self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputTuple)
+
+        self.parent.registry.add_subregistry(self.registry)
+
 
     def initialize_multi_script(self):
         self.script_manager = None

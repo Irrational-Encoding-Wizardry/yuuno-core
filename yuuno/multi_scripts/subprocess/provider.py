@@ -15,17 +15,22 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from typing import List, NamedTuple, Optional, TYPE_CHECKING
+from typing import List, NamedTuple, Optional, TYPE_CHECKING, Dict
 
 from yuuno import Yuuno
 if TYPE_CHECKING:
     from yuuno.multi_scripts.script import ScriptManager, Script
 
 
+class ScriptProviderRegistration(NamedTuple):
+    providercls: str
+    extensions: List[str]
+
+
 class ScriptProviderInfo(NamedTuple):
     providercls: str
-    providerparams: Dict[str, str]
     extensions: List[str]
+    providerparams: Dict[str, str]
 
 
 class ScriptProvider(object):
@@ -65,7 +70,7 @@ class ManagedScriptProvider(ScriptProvider):
     script: Optional['Script']
 
     def __init__(self, yuuno: Yuuno, *, manager_name: str, **kwargs: Dict[str, str]):
-        super(ManagedScriptProvider, self).__init__(self, yuuno, **kwargs)
+        super(ManagedScriptProvider, self).__init__(yuuno, **kwargs)
         self.manager_name = manager_name
         self.manager = None
         self.script = None

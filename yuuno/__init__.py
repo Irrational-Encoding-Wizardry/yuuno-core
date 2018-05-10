@@ -32,4 +32,5 @@ if sys.version_info < (3, 6):
 
 from yuuno.yuuno import Yuuno
 from yuuno.autodiscover import discover_environments
-__all__ = ["Yuuno"] + discover_environments(vars())
+from yuuno.standalone import init_standalone
+__all__ = ["Yuuno", 'init_standalone'] + discover_environments(vars())

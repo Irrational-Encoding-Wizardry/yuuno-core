@@ -16,7 +16,11 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+from typing import TYPE_CHECKING
 from collections.abc import Sequence
+
+if TYPE_CHECKING:
+    import vapoursynth as vs
 
 
 class AlphaOutputClipMeta(abc.ABCMeta):
@@ -55,5 +59,5 @@ class AlphaOutputClipMeta(abc.ABCMeta):
 
 
 class AlphaOutputClip(metaclass=AlphaOutputClipMeta):
-    pass
-
+    def __getitem__(self, item: int) -> 'vs.VideoNode': pass
+    def __len__(self) -> int: pass

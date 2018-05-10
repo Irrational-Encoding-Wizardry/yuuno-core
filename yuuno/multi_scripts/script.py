@@ -49,7 +49,7 @@ class Script(object):
         """
         raise NotImplementedError
 
-    def get_results(self) -> Dict[str, Clip]:
+    def get_results(self) -> Future:
         """
         Returns a dictionary with clips
         that represent the results of the script.

@@ -21,13 +21,14 @@ from typing import Dict, Union, Callable, Any, Optional
 import vapoursynth
 
 from yuuno.clip import Clip
+from yuuno.utils import inline_resolved
 from yuuno.multi_scripts.script import ScriptManager, Script
 
 from yuuno.vs.vsscript.containermodule import create_module
 from yuuno.vs.vsscript.vs_capi import ScriptEnvironment
 from yuuno.vs.vsscript.vs_capi import enable_vsscript, disable_vsscript
 from yuuno.vs.vsscript.clip import WrappedClip
-from yuuno.vs.utils import inline_resolved, is_single
+from yuuno.vs.utils import is_single
 
 
 class VSScript(Script):
@@ -64,6 +65,7 @@ class VSScript(Script):
         self.manager._on_dispose(self.env.id, self.name)
         self.env.dispose()
 
+    @inline_resolved
     def get_results(self) -> Dict[str, Clip]:
         """
         Returns a dictionary with clips
@@ -137,9 +139,9 @@ class VSScriptManager(ScriptManager):
         if is_single():
             enable_vsscript()
             self._does_manage_vsscript = True
-        
-        # Make sure we have full control of VSScriptö
-        elif self._does_manage_vsscript:
+
+        # Make sure we have full control of VSScript
+        elif not self._does_manage_vsscript:
             raise RuntimeError("The script manager does not control VSScript.")
 
         # Create the core now.
