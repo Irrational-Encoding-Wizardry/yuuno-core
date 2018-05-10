@@ -15,10 +15,11 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import traceback
 from multiprocessing.connection import Connection
-from threading import Thread, Lock, Event
-from typing import Mapping, Optional, Any, Callable, Union
-from typing import NamedTuple
+from threading import Thread, RLock as Lock, Event
+from typing import MutableMapping, Mapping, Optional, Any, Callable, Union
+from typing import NamedTuple, List
 from concurrent.futures import Future
 
 
@@ -26,6 +27,7 @@ class Response(NamedTuple):
     id: int
     data: Optional[Any] = None
     error: Optional[Exception] = None
+    traceback: Optional[List[str]] = None
 
     def store(self, fut: Future):
         if self.error is not None:
@@ -43,7 +45,7 @@ class Request(NamedTuple):
         return Response(id=self.id, data=data)
 
     def fail(self, error=None) -> Response:
-        return Response(id=self.id, error=error)
+        return Response(id=self.id, error=error, traceback=traceback.format_tb(error.__traceback__))
 
 
 class Handler(Thread):
@@ -69,7 +71,8 @@ class Handler(Thread):
             if not self.read.poll(1):
                 continue
 
-            self._handle(self.read.recv())
+            data = self.read.recv()
+            self._handle(data)
 
     def send(self, obj):
         with self.lock:
@@ -96,12 +99,14 @@ class Responder(Handler):
     def _handle(self, obj: Request):
         if obj.type not in self.handlers:
             self.send(obj.fail(NotImplementedError("Request not supported")))
+            return
 
         cb = self.handlers[obj.type]
         fut = cb(obj.data)
         fut.add_done_callback(lambda f: self._respond(obj, f))
 
     def _respond(self, req: Request, res: Future):
+        print(req, res)
         if res.exception():
             self.send(req.fail(res.exception()))
         else:
@@ -116,7 +121,7 @@ class Requester(Handler):
     """
     max_id: int
     max_id_lock: Lock
-    waiting: Mapping[int, Future]
+    waiting: MutableMapping[int, Future]
 
     def __init__(self, read: Connection, write: Connection):
         super(Requester, self).__init__(read, write)
@@ -143,5 +148,6 @@ class Requester(Handler):
         req = Request(id=self._generate_id(), type=type, data=data)
         fut = Future()
         fut.set_running_or_notify_cancel()
+        self.waiting[req.id] = fut
         self.send(req)
         return fut

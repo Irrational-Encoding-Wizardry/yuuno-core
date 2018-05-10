@@ -158,7 +158,7 @@ class VapourSynthFrameWrapper(HasTraits, Frame):
 
     def format(self) -> RawFormat:
         if self.extension.raw_force_compat:
-            frame = self.compat_frame
+            frame = self.rgb_frame
         else:
             frame = self.frame
 
@@ -182,7 +182,7 @@ class VapourSynthFrameWrapper(HasTraits, Frame):
 
     def to_raw(self):
         if self.extension.raw_force_compat:
-            frame = self.compat_frame
+            frame = self.rgb_frame
         else:
             frame = self.frame
 

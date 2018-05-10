@@ -18,11 +18,13 @@ class ConvertingMappingProxy(Mapping[K, T], Generic[K, S, T]):
         self.converter = converter
 
     def __getitem__(self, item) -> T:
-        val: S = super(ConvertingMappingProxy, self).__getitem__(item)
-        return self.converter(val)
+        return self.converter(self.mapping[item])
 
     def __len__(self):
         return len(self.mapping)
 
     def __iter__(self) -> Iterator[T]:
         return (self.converter(v) for v in self.mapping)
+
+    def __contains__(self, item):
+        return item in self.mapping

@@ -66,11 +66,19 @@ def future_yield_coro(func: Callable[..., Generator[Future[T], T, R]]) -> Callab
             try:
                 next_fut: ConcFuture = advance(*args)
             except StopIteration as e:
-                fut.set_result(e.value)
+                error = None
+                result = e.value
             except Exception as e:
-                fut.set_exception(e)
+                error = e
+                result = None
             else:
                 next_fut.add_done_callback(_advance)
+                return
+
+            if error:
+                fut.set_exception(error)
+            else:
+                fut.set_result(result)
 
         def _advance(current: Future[T]) -> None:
             if current.exception():

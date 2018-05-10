@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 from PIL.Image import Image, frombytes, merge
 
 from yuuno.clip import Clip, Frame, Size, RawFormat
-from yuuno.utils import future_yield_coro, auto_join
+from yuuno.utils import future_yield_coro, auto_join, inline_resolved
 
 if TYPE_CHECKING:
     from yuuno.multi_scripts.subprocess.process import Subprocess
@@ -67,9 +67,9 @@ class ProxyFrame(Frame):
         planes = []
         for i in range(format.num_planes):
             plane = self.plane_size(i)
-            planedata = raw[index:plane]
-            planes.append(frombytes('L', size, planedata, 'raw', "L", size.width, -1))
-            index+=plane
+            planedata = raw[index:index+plane]
+            planes.append(frombytes('L', size, planedata, 'raw', "L", 0, -1))
+            index += plane
 
         pil_format = "RGB"
         if format.num_planes == 4:
@@ -90,6 +90,7 @@ class ProxyClip(Clip):
     def __len__(self):
         return self.length
 
+    @inline_resolved
     def __getitem__(self, item):
         if item >= len(self):
             raise IndexError("The clip does not have as many frames.")

@@ -94,7 +94,7 @@ class VSStandaloneScript(Script):
             with open(code, "rb") as f:
                 code = f.read()
         else:
-            file = "<yuuno:%r>"
+            file = "<yuuno:%d>" % self.next_code_no
 
         f = compile(code, filename=file, dont_inherit=True, mode="exec")
         with shadow_module('__vapoursynth__', self.main_module):
@@ -109,6 +109,8 @@ class VSScriptProvider(ScriptProvider):
         Called after _all_ extensions have been loaded
         and the system is ready to be loaded.
         """
+        vs = self.yuuno.get_extension('VapourSynth')
+        vs.raw_force_compat = True
         self.script = VSStandaloneScript(env)
 
     def deinitialize(self) -> None:

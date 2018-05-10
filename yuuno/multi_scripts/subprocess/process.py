@@ -15,9 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import pickle
 import functools
-import subprocess
 from pathlib import Path
 from threading import Event
 from queue import Queue, Empty
@@ -25,7 +23,6 @@ from concurrent.futures import Future
 
 from multiprocessing import Pipe, Pool, Process
 from multiprocessing.connection import Connection
-from multiprocessing.context import BaseContext as Context
 
 
 from typing import List, Callable, Any, NamedTuple, Sequence, Dict, Union
@@ -34,6 +31,7 @@ from typing import TYPE_CHECKING
 from traitlets.utils.importstring import import_item
 from traitlets import Instance
 
+from yuuno.multi_scripts.subprocess.basic_commands import BasicCommands
 from yuuno.utils import future_yield_coro
 from yuuno.core.environment import Environment
 from yuuno.multi_scripts.utils import ConvertingMappingProxy
@@ -66,7 +64,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
     queue: Queue
     stopped: Event
     responder: Responder
-    commands: ConvertingMappingProxy[str, Callable[[Any], Any], Callable[[Any], Future]]
+    commands: ConvertingMappingProxy[str, Callable[..., Any], Callable[[Any], Future]]
 
     def additional_extensions(self) -> List[str]:
         """
@@ -118,11 +116,22 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         interoperability for the given environment.
         """
         self.provider.initialize(self)
+        self.handlers.update(BasicCommands(self.provider.get_script()).commands)
+
+    def _copy_result(self, source: Future, destination: Future):
+        def _done(_):
+            if source.exception() is not None:
+                destination.set_exception(source.exception())
+            else:
+                destination.set_result(source.result())
+            self.queue.task_done()
+        source.add_done_callback(_done)
 
     def run(self):
         """
         Wait for commands.
         """
+
         self.responder = Responder(self.read, self.write, self.commands)
         self.responder.start()
 
@@ -133,20 +142,21 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
             except Empty:
                 continue
 
-            try:
-                if not rqi.future.set_running_or_notify_cancel():
-                    continue
+            if not rqi.future.set_running_or_notify_cancel():
+                continue
 
-                try:
-                    result = rqi.cb(*rqi.args)
-                except KeyboardInterrupt:
-                    self.stop()
-                except Exception as e:
-                    rqi.future.set_exception(e)
-                else:
+            try:
+                result = rqi.cb(**rqi.args)
+            except KeyboardInterrupt:
+                self.stop()
+            except Exception as e:
+                rqi.future.set_exception(e)
+            else:
+                if not isinstance(result, Future):
                     rqi.future.set_result(result)
-            finally:
-                self.queue.task_done()
+                    self.queue.task_done()
+                else:
+                    self._copy_result(result, rqi.future)
 
         while True:
             try:
@@ -261,7 +271,7 @@ class Subprocess(Script):
         """
 
         indexes = yield self.requester.submit("script/subprocess/results", {})
-        return {index: ProxyClip(index.name, index.length, self) for index in indexes}
+        return {name: ProxyClip(name, length, self) for name, length in indexes.items()}
 
     def execute(self, code: Union[str, Path]) -> Future:
         """

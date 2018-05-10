@@ -32,16 +32,18 @@ class Size(NamedTuple):
     height: int
 
 
+class SampleType(IntEnum):
+    INTEGER = 0
+    FLOAT = 1
+
+
+class ColorFamily(IntEnum):
+    GREY = 0
+    RGB = 1
+    YUV = 2
+
+
 class RawFormat(NamedTuple):
-    class SampleType(IntEnum):
-        INTEGER = 0
-        FLOAT = 0
-
-    class ColorFamily(IntEnum):
-        GREY = 0
-        RGB = 1
-        YUV = 2
-
     bits_per_sample: int
     num_planes: int
     family: ColorFamily
@@ -52,6 +54,8 @@ class RawFormat(NamedTuple):
     @property
     def bytes_per_sample(self) -> int:
         return int(math.ceil(self.bits_per_sample/8))
+RawFormat.SampleType = SampleType
+RawFormat.ColorFamily = ColorFamily
 
 
 GRAY8 = RawFormat(8, 1, RawFormat.ColorFamily.GREY, RawFormat.SampleType.INTEGER)
