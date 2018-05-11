@@ -109,9 +109,10 @@ def future_yield_coro(func: Callable[..., Generator[Future[T], T, R]]) -> Callab
 def gather(futures: [Sequence[Future[T]]]) -> Sequence[T]:
     def wait(wait_for: [Sequence[Future]]) -> Future:
         def remove(future):
+            nonlocal running
             with running_lock:
-                running.remove(future)
-                if len(running) > 0:
+                running -= 1
+                if running > 0:
                     return
 
             failed = [f for f in wait_for if f.exception() is not None]
@@ -120,7 +121,7 @@ def gather(futures: [Sequence[Future[T]]]) -> Sequence[T]:
 
         res = ConcFuture()
         res.set_running_or_notify_cancel()
-        running = set(futures)
+        running = len(futures)
         running_lock: Lock = Lock()
 
         for fut in wait_for:

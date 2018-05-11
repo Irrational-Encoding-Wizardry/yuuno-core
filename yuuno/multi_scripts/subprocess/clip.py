@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from typing import Optional, Tuple
 
-from PIL.Image import Image, frombytes, merge
+from PIL.Image import Image, frombuffer, merge
 
 from yuuno.clip import Clip, Frame, Size, RawFormat
 from yuuno.utils import future_yield_coro, auto_join, inline_resolved, gather
@@ -52,7 +52,6 @@ class ProxyFrame(Frame):
                     "id": self.clip,
                     "frame": self.frameno
                 }, protect=True)
-                print(buf)
                 if isinstance(result, int):
                     self._cached_raw = bytes(buf[:result])
                 else:
@@ -71,13 +70,14 @@ class ProxyFrame(Frame):
             return self._cached_img
 
         size, format, raw = yield self.get_raw_data_async()
+        raw = memoryview(raw)
 
         index = 0
         planes = []
         for i in range(format.num_planes):
             plane = self.plane_size(i)
             planedata = raw[index:index+plane]
-            planes.append(frombytes('L', size, planedata, 'raw', "L"))
+            planes.append(frombuffer('L', size, planedata, 'raw', "L", 0, 1))
             index += plane
 
         pil_format = "RGB"

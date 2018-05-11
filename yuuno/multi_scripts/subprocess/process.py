@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
 # This sets the size of the frame-buffer.
 # I expect 8K to be enough for now.
-FRAME_BUFFER_SIZE = 1 # 7680*4320*3
+FRAME_BUFFER_SIZE = 7680*4320*3
 
 
 class RequestQueueItem(NamedTuple):
