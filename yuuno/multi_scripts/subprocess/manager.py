@@ -15,11 +15,21 @@ class SubprocessScriptManager(ScriptManager):
     instances: Dict[str, Subprocess]
     starter: ScriptProviderInfo
 
+    pool: Pool
+    _next_process: Subprocess
+
     def __init__(self, starter: ScriptProviderInfo):
         self.instances = {}
         self.starter = starter
         ctx: Context = get_context("spawn")
         self.pool = ctx.Pool()
+        self._next_process = None
+        self._checkout_next()
+
+    def _checkout_next(self):
+        prev = self._next_process
+        self._next_process = Subprocess(self.pool, self.starter)
+        return prev
 
     def create(self, name: str, *, initialize=False) -> Script:
         """
@@ -27,7 +37,7 @@ class SubprocessScriptManager(ScriptManager):
         """
         if name in self.instances and self.instances[name].alive:
             raise ValueError("A core with this name already exists.")
-        process = Subprocess(self.pool, self.starter)
+        process = self._checkout_next()
         self.instances[name] = process
         if initialize:
             process.initialize()
@@ -53,3 +63,4 @@ class SubprocessScriptManager(ScriptManager):
         Disposes all scripts and tries to clean up.
         """
         self.dispose_all()
+        self._next_process.dispose()

@@ -1,15 +1,21 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from yuuno.utils import future_yield_coro
 from yuuno.multi_scripts.script import Script
+
+if TYPE_CHECKING:
+    from yuuno.multi_scripts.subprocess.process import LocalSubprocessEnvironment
 
 
 class BasicCommands(object):
 
     script: Script
+    env: 'LocalSubprocessEnvironment'
 
-    def __init__(self, script: Script):
+    def __init__(self, script: Script, env: 'LocalSubprocessEnvironment'):
         self.script = script
+        self.env = env
 
     @property
     def commands(self):
@@ -40,7 +46,6 @@ class BasicCommands(object):
         clip = outputs.get(id, None)
         if clip is None:
             return None
-        print(type(frame))
         try:
             frame = yield clip[frame]
         except IndexError:
@@ -57,4 +62,13 @@ class BasicCommands(object):
             frame = yield clip[frame]
         except IndexError:
             return None
-        return frame.to_raw()
+        frame = frame.to_raw()
+
+        from yuuno.multi_scripts.subprocess.process import FRAME_BUFFER_SIZE
+        if len(frame) > FRAME_BUFFER_SIZE:
+            return frame
+
+        with self.env.framebuffer() as f:
+            f[:len(frame)] = frame
+
+        return len(frame)

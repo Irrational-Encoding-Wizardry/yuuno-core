@@ -97,8 +97,9 @@ class Responder(Handler):
         self.handlers = handlers
 
     def _handle(self, obj: Request):
+        print(obj)
         if obj.type not in self.handlers:
-            self.send(obj.fail(NotImplementedError("Request not supported")))
+            self._send(obj.fail(NotImplementedError("Request not supported")))
             return
 
         cb = self.handlers[obj.type]
@@ -106,11 +107,15 @@ class Responder(Handler):
         fut.add_done_callback(lambda f: self._respond(obj, f))
 
     def _respond(self, req: Request, res: Future):
-        print(req, res)
         if res.exception():
-            self.send(req.fail(res.exception()))
+            resp = req.fail(res.exception())
         else:
-            self.send(req.respond(res.result()))
+            resp = req.respond(res.result())
+        self._send(resp)
+
+    def _send(self, resp):
+        print(resp)
+        self.send(resp)
 
 
 class Requester(Handler):

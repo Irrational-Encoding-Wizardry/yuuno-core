@@ -15,15 +15,19 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import os
 import functools
 from pathlib import Path
-from threading import Event
+from contextlib import contextmanager
+
+from threading import Lock, Event, Thread
 from queue import Queue, Empty
 from concurrent.futures import Future
 
+from ctypes import c_ubyte
 from multiprocessing import Pipe, Pool, Process
+from multiprocessing.sharedctypes import RawArray as Array
 from multiprocessing.connection import Connection
-
 
 from typing import List, Callable, Any, NamedTuple, Sequence, Dict, Union
 from typing import TYPE_CHECKING
@@ -45,6 +49,11 @@ if TYPE_CHECKING:
     from yuuno.clip import Clip
 
 
+# This sets the size of the frame-buffer.
+# I expect 8K to be enough for now.
+FRAME_BUFFER_SIZE = 7680*4320*3
+
+
 class RequestQueueItem(NamedTuple):
     future: Future
     cb: Callable[[Any], Any]
@@ -60,6 +69,9 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
     write: Connection
     read: Connection
     provider: ScriptProvider = Instance(ScriptProvider)
+
+    _framebuffer: Array
+    _framebuffer_lock: Lock
 
     queue: Queue
     stopped: Event
@@ -116,7 +128,13 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         interoperability for the given environment.
         """
         self.provider.initialize(self)
-        self.handlers.update(BasicCommands(self.provider.get_script()).commands)
+        self.handlers.update(BasicCommands(self.provider.get_script(), self).commands)
+        self._framebuffer_lock = Lock()
+
+    @contextmanager
+    def framebuffer(self):
+        with self._framebuffer_lock:
+            yield self._framebuffer
 
     def _copy_result(self, source: Future, destination: Future):
         def _done(_):
@@ -177,16 +195,39 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         """
         self.provider.deinitialize()
 
+    @staticmethod
+    def _preload():
+        print(os.getpid(), ">", "Preloading.")
+        from yuuno import init_standalone
+        y = init_standalone()
+        y.start()
+        y.stop()
+        print(os.getpid(), ">", "Preload complete.")
+
+    @staticmethod
+    def _check_parent():
+        import psutil
+        current = psutil.Process()
+        current.parent().wait()
+        print("Parent died. Kill own process...")
+        current.kill()
+
     @classmethod
-    def execute(cls, read: Connection, write: Connection):
+    def execute(cls, read: Connection, write: Connection, framebuffer: Array):
+        cls._preload()
+        Thread(target=cls._check_parent,  daemon=True).start()
+
         from yuuno import Yuuno
         yuuno = Yuuno.instance(parent=None)
         env = cls(parent=yuuno, read=read, write=write)
+        env._framebuffer = framebuffer
         yuuno.environment = env
 
-        # Wait for the ProviderMeta to be set. (Zygote initialize)
+        # Wait for the ProviderMeta to be set.
+        print(os.getpid(), ">", "Ready to deploy!")
         env._provider_meta = read.recv()
         yuuno.start()
+        print(os.getpid(), ">", "Ready to deployed!")
 
         # Run the environment
         env.run()
@@ -196,7 +237,6 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
 
 
 class Subprocess(Script):
-
     process: Process
     self_read: Connection
     self_write: Connection
@@ -217,13 +257,21 @@ class Subprocess(Script):
 
         self.provider_info = provider_info
 
+        # Allow an 8K image to be transmitted.
+        # This should be enough.
+        self._fb = Array(c_ubyte, FRAME_BUFFER_SIZE)
+        self._fb_lock = Lock()
+
         self._create()
         self.running = False
 
     def _create(self):
         self.process = self.pool.Process(
             target=LocalSubprocessEnvironment.execute,
-            args=(self.self_read, self.child_write)
+            args=(
+                self.self_read, self.child_write,           # Commands
+                self._fb
+            )
         )
         self.process.start()
 
@@ -250,8 +298,10 @@ class Subprocess(Script):
         """
         if not self.alive:
             return
-        self.requester.stop()
-        self.requester.join()
+
+        if self.requester.is_alive():
+            self.requester.stop()
+            self.requester.join()
 
         self.child_write.close()
         self.child_read.close()
@@ -262,6 +312,11 @@ class Subprocess(Script):
 
     def __del__(self):
         self.dispose()
+
+    @contextmanager
+    def framebuffer(self):
+        with self._fb_lock:
+            yield self._fb
 
     @future_yield_coro
     def get_results(self) -> Dict[str, 'Clip']:

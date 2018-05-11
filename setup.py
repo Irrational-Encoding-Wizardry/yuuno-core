@@ -28,7 +28,8 @@ with open('HISTORY.rst', encoding="utf-8") as history_file:
 
 requirements = [
     "traitlets",
-    "pillow"
+    "pillow",
+    "psutil"
 ]
 
 test_requirements = [

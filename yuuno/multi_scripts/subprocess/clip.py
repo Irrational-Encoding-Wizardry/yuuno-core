@@ -47,10 +47,17 @@ class ProxyFrame(Frame):
     @future_yield_coro
     def _raw_async(self) -> bytes:
         if self._cached_raw is None:
-            self._cached_raw = yield self.script.requester.submit('script/subprocess/results/raw', {
-                "id": self.clip,
-                "frame": self.frameno
-            })
+            with self.script.framebuffer() as buf:
+                result = yield self.script.requester.submit('script/subprocess/results/raw', {
+                    "id": self.clip,
+                    "frame": self.frameno
+                })
+                if isinstance(result, int):
+                    self._cached_raw = bytes(buf[:result])
+                else:
+                    # We got the actual object pickled.
+                    # This means we are dealing with extremely huge frames
+                    self._cached_raw = result
         return self._cached_raw
 
     def to_raw(self) -> bytes:
