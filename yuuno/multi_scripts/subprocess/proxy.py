@@ -29,6 +29,7 @@ class Response(NamedTuple):
     data: Optional[Any] = None
     error: Optional[Exception] = None
     traceback: Optional[List[str]] = None
+    protected: bool = False
 
     def store(self, fut: Future):
         if self.error is not None:
@@ -41,12 +42,18 @@ class Request(NamedTuple):
     id: int
     type: str
     data: Any
+    protect: bool = False
 
     def respond(self, data=None) -> Response:
-        return Response(id=self.id, data=data)
+        return Response(id=self.id, data=data, protected=self.protect)
 
     def fail(self, error=None) -> Response:
-        return Response(id=self.id, error=error, traceback=traceback.format_tb(error.__traceback__))
+        return Response(
+            id=self.id,
+            error=error,
+            traceback=traceback.format_tb(error.__traceback__),
+            protected=self.protect
+        )
 
 
 class Handler(Thread):
@@ -115,8 +122,10 @@ class Responder(Handler):
         self._send(resp)
 
     def _send(self, resp):
-        print(os.getpid(), ">", resp)
         self.send(resp)
+        if resp.protected:
+            resp = "(protected)"
+        print(os.getpid(), ">", resp)
 
 
 class Requester(Handler):
@@ -150,8 +159,8 @@ class Requester(Handler):
             self.max_id += 1
         return new_id
 
-    def submit(self, type: str, data: Any) -> Future:
-        req = Request(id=self._generate_id(), type=type, data=data)
+    def submit(self, type: str, data: Any, protect: bool = False) -> Future:
+        req = Request(id=self._generate_id(), type=type, data=data, protect=protect)
         fut = Future()
         fut.set_running_or_notify_cancel()
         self.waiting[req.id] = fut

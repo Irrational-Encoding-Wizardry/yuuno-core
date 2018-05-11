@@ -51,7 +51,8 @@ class ProxyFrame(Frame):
                 result = yield self.script.requester.submit('script/subprocess/results/raw', {
                     "id": self.clip,
                     "frame": self.frameno
-                })
+                }, protect=True)
+                print(buf)
                 if isinstance(result, int):
                     self._cached_raw = bytes(buf[:result])
                 else:

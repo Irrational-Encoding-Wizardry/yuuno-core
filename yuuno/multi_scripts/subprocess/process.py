@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
+import math
 import functools
 from pathlib import Path
 from contextlib import contextmanager
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
 
 # This sets the size of the frame-buffer.
 # I expect 8K to be enough for now.
-FRAME_BUFFER_SIZE = 7680*4320*3
+FRAME_BUFFER_SIZE = 1 # 7680*4320*3
 
 
 class RequestQueueItem(NamedTuple):
@@ -134,7 +135,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
     @contextmanager
     def framebuffer(self):
         with self._framebuffer_lock:
-            yield self._framebuffer
+            yield memoryview(self._framebuffer).cast("B")
 
     def _copy_result(self, source: Future, destination: Future):
         def _done(_):
@@ -316,7 +317,7 @@ class Subprocess(Script):
     @contextmanager
     def framebuffer(self):
         with self._fb_lock:
-            yield self._fb
+            yield memoryview(self._fb).cast("B")
 
     @future_yield_coro
     def get_results(self) -> Dict[str, 'Clip']:

@@ -130,6 +130,9 @@ def gather(futures: [Sequence[Future[T]]]) -> Sequence[T]:
 
     res: WaitResult = (yield wait(futures))
     if res.failed:
+        if len(res.failed) == 1:
+            raise res.failed[0].exception()
+
         raise AccumulatedException("Multiple errors occured.", res.failed)
 
     return [f.result() for f in res.completed]
