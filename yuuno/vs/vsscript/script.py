@@ -20,6 +20,7 @@ from typing import Dict, Union, Callable, Any, Optional
 
 import vapoursynth
 
+from yuuno import Yuuno
 from yuuno.clip import Clip
 from yuuno.utils import inline_resolved
 from yuuno.multi_scripts.script import ScriptManager, Script
@@ -43,6 +44,9 @@ class VSScript(Script):
 
         self.manager._on_create(self, self.env.id, self.name)
 
+    @property
+    def _yuuno(self):
+        return Yuuno.instance()
 
     @property
     def alive(self) -> bool:
@@ -71,7 +75,7 @@ class VSScript(Script):
         Returns a dictionary with clips
         that represent the results of the script.
         """
-        return {k: WrappedClip(self, v) for k, v in self.env.outputs.items()}
+        return {str(k): WrappedClip(self, self._yuuno.wrap(v)) for k, v in self.env.outputs.items()}
 
     @inline_resolved
     def perform(self, cb: Callable[[], Any]) -> Any:
@@ -143,6 +147,9 @@ class VSScriptManager(ScriptManager):
         # Make sure we have full control of VSScript
         elif not self._does_manage_vsscript:
             raise RuntimeError("The script manager does not control VSScript.")
+
+        if name in self.scripts:
+            raise ValueError("The script already exists.")
 
         # Create the core now.
         script = VSScript(self, name)

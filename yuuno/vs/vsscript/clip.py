@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from typing import TYPE_CHECKING, Callable, Any, TypeVar, Generic
 
+from yuuno.utils import future_yield_coro, auto_join
 from yuuno.clip import Clip, Frame
 
 if TYPE_CHECKING:
@@ -36,9 +37,24 @@ class WrappedMixin(Generic[T]):
 
     @staticmethod
     def wrap(name: str) -> Callable[..., Any]:
+        @auto_join
+        @future_yield_coro
         def _func(self: 'WrappedMixin', *args, **kwargs):
             func = getattr(self.parent, name)
-            result = self.env.perform(lambda: func(*args, **kwargs)).result()
+            result = yield self.env.perform(lambda: func(*args, **kwargs))
+            result = yield result
+            if isinstance(result, Frame):
+                result = WrappedFrame(self.env, result)
+            return result
+        return _func
+
+    @staticmethod
+    def wrap_future(name: str):
+        @future_yield_coro
+        def _func(self: 'WrappedMixin', *args, **kwargs):
+            func = getattr(self.parent, name)
+            result = yield self.env.perform(lambda: func(*args, **kwargs))
+            result = yield result
             if isinstance(result, Frame):
                 result = WrappedFrame(self.env, result)
             return result
@@ -48,11 +64,14 @@ class WrappedMixin(Generic[T]):
 class WrappedFrame(WrappedMixin[Frame], Frame):
     to_pil = WrappedMixin.wrap('to_pil')
     to_raw = WrappedMixin.wrap('to_raw')
+    size = WrappedMixin.wrap('size')
+    format = WrappedMixin.wrap('format')
+    get_raw_data_async = WrappedMixin.wrap_future('get_raw_data_async')
 
 
 class WrappedClip(WrappedMixin[Clip], Clip):
     __len__ = WrappedMixin.wrap('__len__')
-    __getitem__ = WrappedMixin.wrap('__getitem__')
+    __getitem__ = WrappedMixin.wrap_future('__getitem__')
 
     @property
     def clip(self):

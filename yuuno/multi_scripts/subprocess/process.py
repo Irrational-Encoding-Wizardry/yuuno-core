@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
-import math
 import functools
 from pathlib import Path
 from contextlib import contextmanager
@@ -278,7 +277,7 @@ class Subprocess(Script):
 
     @property
     def alive(self) -> bool:
-        return self.running and self.process.is_alive()
+        return self.running and self.process is not None and self.process.is_alive()
 
     def initialize(self):
         if self.alive:
