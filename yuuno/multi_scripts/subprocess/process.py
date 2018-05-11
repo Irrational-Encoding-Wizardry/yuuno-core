@@ -209,7 +209,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         import psutil
         current = psutil.Process()
         current.parent().wait()
-        print("Parent died. Kill own process...")
+        print(os.getpid(), ">", "Parent died. Kill own process...")
         current.kill()
 
     @classmethod
@@ -227,7 +227,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         print(os.getpid(), ">", "Ready to deploy!")
         env._provider_meta = read.recv()
         yuuno.start()
-        print(os.getpid(), ">", "Ready to deployed!")
+        print(os.getpid(), ">", "Deployed", env._provider_meta)
 
         # Run the environment
         env.run()

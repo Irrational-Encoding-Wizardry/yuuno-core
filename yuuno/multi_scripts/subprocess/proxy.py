@@ -15,6 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import os
 import traceback
 from multiprocessing.connection import Connection
 from threading import Thread, RLock as Lock, Event
@@ -97,7 +98,7 @@ class Responder(Handler):
         self.handlers = handlers
 
     def _handle(self, obj: Request):
-        print(obj)
+        print(os.getpid(), ">", obj)
         if obj.type not in self.handlers:
             self._send(obj.fail(NotImplementedError("Request not supported")))
             return
@@ -114,7 +115,7 @@ class Responder(Handler):
         self._send(resp)
 
     def _send(self, resp):
-        print(resp)
+        print(os.getpid(), ">", resp)
         self.send(resp)
 
 
