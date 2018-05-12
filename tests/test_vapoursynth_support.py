@@ -113,7 +113,11 @@ class TestVapourSynth(unittest.TestCase):
 
     def test_003_vapoursynth_frame_extract(self):
         from yuuno.vs.clip import VapourSynthFrameWrapper
-        fw = VapourSynthFrameWrapper(frame=self.black_clip.get_frame(0), compat_frame=self.black_compat.get_frame(0))
+        fw = VapourSynthFrameWrapper(
+            frame=self.black_clip.get_frame(0),
+            rgb_frame=self.black_clip.get_frame(0),
+            compat_frame=self.black_compat.get_frame(0)
+        )
         im = fw.to_pil()
 
         self.assertEqual(im.width, self.black_clip.width)
