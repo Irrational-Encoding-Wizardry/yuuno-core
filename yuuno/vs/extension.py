@@ -26,6 +26,7 @@ from traitlets import default
 from traitlets import CInt, CBool
 from traitlets import Union
 from traitlets import List
+from traitlets.config import import_item
 
 from yuuno.trait_types import Callable
 
@@ -55,8 +56,16 @@ class VapourSynth(Extension):
 Note that this feature is disabled on vsscript-environments (vsedit, vspipe, etc.)""", config=True)
     yuv_matrix: str = Unicode("709", help="The YUV-Matrix to use when converting to RGB", config=True)
     prefer_props: bool = CBool(True, help="If set, the data of the video node will be preferred.", config=True)
+    merge_bands: bool = CBool(True, help="Manually extract the planes and merge them using PIL", config=True)
 
-    resizer: TUnion[str, TCallable] = Union([DottedObjectName(), Callable()],
+    post_processor = Union(
+        [DottedObjectName(), Callable()], allow_none=True,
+        default_value=None,
+        help="Define a post-processor function. It gets an RGB24 clip and returns an RGB24 clip.",
+        config=True
+    )
+    resizer: TUnion[str, TCallable] = Union(
+        [DottedObjectName(), Callable()],
         default_value="resize.Spline36",
         help="""Defines the resizer to use when converting from YUV to RGB.
 It is essentially a function which takes the same arguments as a VapourSynth internal
@@ -79,7 +88,7 @@ Settings to a value less than one makes it default to the number of hardware thr
     core_accept_lowercase: bool = CBool(False, help="When set to `True` function name lookups in the core are case insensitive. Don't distribute scripts that need it to be set.", config=True)
     core_max_cache_size: int = CBool(None, allow_none=True, help="Set the upper framebuffer cache size after which memory is aggressively freed. The value is in mediabytes.", config=True)
 
-    vsscript_environment_wrap: bool = CBool(True, help="Allow Yuuno to automatically . Do not disable while running multiple cores at once.", config=True)
+    vsscript_environment_wrap: bool = CBool(True, help="Allow Yuuno to automatically wrap the internal frame-extractor into the current environment. Do not disable while running multiple cores at once.", config=True)
     raw_force_compat: bool = CBool(True, "In raw image exports, force Planar RGB output", config=True)
 
     log_handlers: TList[TCallable[[int, str], None]] = List(Callable())
@@ -132,6 +141,15 @@ Settings to a value less than one makes it default to the number of hardware thr
         if callable(self.resizer):
             return self.resizer
         return filter_or_import(self.resizer)
+
+    @property
+    def processor(self):
+        if self.post_processor is None:
+            return
+        func = self.post_processor
+        if not callable(func):
+            func = import_item(func)
+        return func
 
     def _on_vs_log(self, level: MessageLevel, message: str):
         try:

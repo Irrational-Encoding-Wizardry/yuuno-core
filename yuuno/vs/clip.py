@@ -23,7 +23,7 @@ from PIL import Image
 from traitlets import HasTraits, Instance, observe
 
 import vapoursynth as vs
-from vapoursynth import VideoNode, VideoFrame, VideoProps
+from vapoursynth import VideoNode, VideoFrame
 
 from yuuno import Yuuno
 from yuuno.utils import future_yield_coro, gather
@@ -145,7 +145,13 @@ class VapourSynthFrameWrapper(HasTraits, Frame):
         return Yuuno.instance().get_extension(VapourSynth)
 
     def _extract(self):
-        self.pil_cache = extract_plane(self.compat_frame, 0, compat=True)
+        if self.extension.merge_bands:
+            r = extract_plane(self.rgb_frame, 0, compat=False, direction=1)
+            g = extract_plane(self.rgb_frame, 1, compat=False, direction=1)
+            b = extract_plane(self.rgb_frame, 2, compat=False, direction=1)
+            self.pil_cache = Image.merge('RGB', (r, g, b))
+        else:
+            self.pil_cache = extract_plane(self.compat_frame, 0, compat=True)
 
     def to_pil(self) -> Image.Image:
         if self.pil_cache is None:
@@ -224,8 +230,12 @@ class VapourSynthClipMixin(HasTraits):
                 prefer_props=self.extension.prefer_props
             )
 
-        if clip.format.color_family != vs.RGB or clip.format.bits_per_sample != 8:
+        if clip.format.color_family == vs.RGB or clip.format.bits_per_sample != 8:
             clip = self.extension.resize_filter(clip, format=vs.RGB24)
+
+        processor = self.extension.processor
+        if processor is not None:
+            clip = processor(clip)
 
         return clip
 
