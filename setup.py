@@ -16,8 +16,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
 from setuptools import setup, find_packages
 
 with open('README.rst', encoding="utf-8") as readme_file:
@@ -38,12 +36,11 @@ test_requirements = [
 
 extras_requires = {
     'vapoursynth': ['vapoursynth'],
-    'juptyter': ['yuuno-core']
 }
 
 setup(
     name='yuuno-core',
-    version='1.0.0.dev2',
+    version='1.0.0.dev3',
     description="Yuuno-Core - Extract frames from videos.",
     long_description=readme + '\n\n' + history,
     author="stuxcrystal",
@@ -53,7 +50,7 @@ setup(
     package_dir={'yuuno': 'yuuno'},
     include_package_data=True,
     install_requires=requirements,
-    extras_requires=extras_requires,
+    extras_require=extras_requires,
     license="GNU Lesser General Public License v3 (LGPLv3)",
     zip_safe=False,
     keywords='yuuno',
