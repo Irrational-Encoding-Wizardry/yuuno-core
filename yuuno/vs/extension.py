@@ -54,6 +54,8 @@ class VapourSynth(Extension):
     
 Note that this feature is disabled on vsscript-environments (vsedit, vspipe, etc.)""", config=True)
     yuv_matrix: str = Unicode("709", help="The YUV-Matrix to use when converting to RGB", config=True)
+    prefer_props: bool = CBool(True, help="If set, the data of the video node will be preferred.", config=True)
+
     resizer: TUnion[str, TCallable] = Union([DottedObjectName(), Callable()],
         default_value="resize.Spline36",
         help="""Defines the resizer to use when converting from YUV to RGB.

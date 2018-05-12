@@ -23,7 +23,7 @@ from PIL import Image
 from traitlets import HasTraits, Instance, observe
 
 import vapoursynth as vs
-from vapoursynth import VideoNode, VideoFrame
+from vapoursynth import VideoNode, VideoFrame, VideoProps
 
 from yuuno import Yuuno
 from yuuno.utils import future_yield_coro, gather
@@ -217,7 +217,12 @@ class VapourSynthClipMixin(HasTraits):
 
     def _to_rgb32(self, clip: VideoNode) -> VideoNode:
         if clip.format.color_family == vs.YUV:
-            clip = self.extension.resize_filter(clip, format=vs.RGB24, matrix_in_s=self.extension.yuv_matrix)
+            clip = self.extension.resize_filter(
+                clip,
+                format=vs.RGB24,
+                matrix_in_s=self.extension.yuv_matrix,
+                prefer_props=self.extension.prefer_props
+            )
 
         if clip.format.color_family != vs.RGB or clip.format.bits_per_sample != 8:
             clip = self.extension.resize_filter(clip, format=vs.RGB24)
