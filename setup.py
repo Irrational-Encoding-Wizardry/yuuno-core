@@ -40,7 +40,7 @@ extras_requires = {
 
 setup(
     name='yuuno-core',
-    version='1.0.0.dev4',
+    version='1.0.0rc1',
     description="Yuuno-Core - Extract frames from videos.",
     long_description=readme + '\n\n' + history,
     author="stuxcrystal",
