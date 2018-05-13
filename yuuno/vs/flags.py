@@ -68,52 +68,52 @@ class flag(int):
 
 
 class Features(enum.Flag):
-    NOT_SUPPORTED = flag(0, lambda vs: False)
+    NOT_SUPPORTED = flag(1, lambda vs: False)
 
-    @flag(1)
+    @flag(2)
     @staticmethod
     def FUNCTIONS_INTROSPECTABLE(vs: 'vapoursynth'):
         # AT R36
         return hasattr(vs, 'construct_signature')
 
-    @flag(2)
+    @flag(4)
     @staticmethod
     def SUPPORT_CORE_PROXY(vs: 'vapoursynth'):
         # AT R37
         return hasattr(vs, 'core')
 
-    @flag(4)
+    @flag(8)
     @staticmethod
     def EXTRACT_VIA_ARRAY(vs: 'vapoursynth'):
         # AT R37
         return hasattr(vs.VideoNode, 'get_read_array')
 
-    @flag(8)
+    @flag(16)
     @staticmethod
     def EXPORT_OUTPUT_DICT(vs: 'vapoursynth'):
         # AT R39
         return hasattr(vs, 'get_outputs')
 
-    @flag(16)
+    @flag(32)
     @staticmethod
     def SUPPORT_ALPHA_OUTPUT_TUPLE(vs: 'vapoursynth'):
         # AT R43
         return hasattr(vs, 'AlphaOutputTuple')
 
-    @flag(32)
+    @flag(64)
     @staticmethod
     def COMPATBGR_IS_XRGB(vs):
         # AT <=R43 AND DARWIN
         return platform.system() == 'Darwin' and not hasattr(vs, 'Environment')
 
-    @flag(64)
+    @flag(128)
     @staticmethod
     def EXPORT_VSSCRIPT_ENV(vs):
         # AT R44
         return hasattr(vs, 'Environment')
 
     def __bool__(self):
-        return self in self.current
+        return self.value and self in self.current
 
     @classproperty
     def current(cls):
