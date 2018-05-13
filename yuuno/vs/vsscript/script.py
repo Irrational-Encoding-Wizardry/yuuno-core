@@ -57,6 +57,7 @@ class VSScript(Script):
 
     def initialize(self) -> None:
         self.env.enable()
+        self.env.perform(lambda: self._yuuno.get_extension('VapourSynth').update_core_values())
 
     def _invoke_exec_counter(self):
         self.exec_counter += 1
