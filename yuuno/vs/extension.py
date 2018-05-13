@@ -124,7 +124,7 @@ Settings to a value less than one makes it default to the number of hardware thr
 
     @classmethod
     def is_supported(cls):
-        return Features.NOT_SUPPORTED
+        return not Features.NOT_SUPPORTED
 
     @property
     def resize_filter(self) -> TCallable[['vs.VideoNode', 'int'], 'vs.VideoNode']:
