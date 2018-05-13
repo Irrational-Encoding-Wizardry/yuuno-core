@@ -206,7 +206,7 @@ Settings to a value less than one makes it default to the number of hardware thr
         ))
 
         # Check support for vapoursynth/#389 at R44
-        if Features.EXPORT_VSSCRIPT_ENV:
+        if not Features.EXPORT_VSSCRIPT_ENV:
             self.parent.log.info("Yuuno doesn't support VSScript for VS<R44")
             return
 
@@ -236,6 +236,5 @@ Settings to a value less than one makes it default to the number of hardware thr
             import vapoursynth
             vapoursynth.set_message_handler(None)
 
-        if Features.EXPORT_VSSCRIPT_ENV in Features.current and \
-                self.script_manager is not None:
+        if Features.EXPORT_VSSCRIPT_ENV and self.script_manager is not None:
             self.script_manager.disable()
