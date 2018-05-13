@@ -17,9 +17,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import enum
 import types
+import platform
 from typing import AnyStr, Callable
 
 from traitlets.utils.importstring import import_item
+
+# Here are Version-Specific Flags that do not directly depend
+# on the VapourSynth Module.
+IS_MACOS = platform.system() == 'Darwin'
+COMPATBGR_IS_XRGB = IS_MACOS
 
 
 def get_proxy_or_core(*, resolve_proxy=False):
@@ -101,5 +107,3 @@ class VapourSynthEnvironment(object):
         self.previous_outputs = self.get_global_outputs().copy()
         self._set_outputs(self.old_outputs)
         self.old_outputs = None
-
-

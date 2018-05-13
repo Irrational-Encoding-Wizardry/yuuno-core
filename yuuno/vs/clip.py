@@ -29,8 +29,12 @@ from yuuno import Yuuno
 from yuuno.utils import future_yield_coro, gather
 from yuuno.clip import Frame, Size, RawFormat
 from yuuno.vs.extension import VapourSynth
-from yuuno.vs.utils import get_proxy_or_core, is_single
+from yuuno.vs.utils import get_proxy_or_core, is_single, COMPATBGR_IS_XRGB
 from yuuno.vs.alpha import AlphaOutputClip
+
+
+# On MAC OSX VapourSynth<=R43 is actually returned as XRGB instead of RGBX
+COMPAT_PIXEL_FORMAT = "XRGB" if COMPATBGR_IS_XRGB else "BGRX"
 
 
 def calculate_size(frame: VideoFrame, planeno: int) -> Tuple[int, int]:
@@ -79,7 +83,7 @@ def extract_plane_r36compat(frame, planeno, *, compat=False, direction=-1, raw=F
         if not compat:
             return Image.frombuffer('L', (width, height), buf, "raw", "L", stride, direction)
         else:
-            return Image.frombuffer('RGB', (width, height), buf, "raw", "BGRX", stride, direction)
+            return Image.frombuffer('RGB', (width, height), buf, "raw", COMPAT_PIXEL_FORMAT, stride, direction)
 
 @overload
 def extract_plane_new(frame: VideoFrame, planeno: int, *, compat: bool=False , direction: int = -1, raw=True) -> bytes: pass
@@ -106,7 +110,7 @@ def extract_plane_new(frame, planeno, *, compat=False, direction=-1, raw=False):
         if not compat:
             return Image.frombuffer('L', (width, height), bytes(arr), "raw", "L", stride, direction)
         else:
-            return Image.frombuffer('RGB', (width, height), bytes(arr), "raw", "BGRX", stride, direction)
+            return Image.frombuffer('RGB', (width, height), bytes(arr), "raw", COMPAT_PIXEL_FORMAT, stride, direction)
 
 @overload
 def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False , direction: int = -1, raw=True) -> bytes: pass
@@ -239,12 +243,11 @@ class VapourSynthClipMixin(HasTraits):
 
         return clip
 
-    def to_rgb32(self, frame: VideoFrame) -> VideoNode:
-        clip = self._wrap_frame(frame)
-        return self._to_rgb32(clip)
+    def to_rgb32(self, frame: VideoNode) -> VideoNode:
+        return self._to_rgb32(frame)
 
-    def to_compat_rgb32(self, frame: VideoFrame) -> VideoNode:
-        return self.extension.resize_filter(self.to_rgb32(frame), format=vs.COMPATBGR32)
+    def to_compat_rgb32(self, frame: VideoNode) -> VideoNode:
+        return self.extension.resize_filter(frame, format=vs.COMPATBGR32)
 
     def __len__(self):
         return len(self.clip)
@@ -258,8 +261,10 @@ class VapourSynthClipMixin(HasTraits):
                 raise RuntimeError("Tried to access clip of a dead core.") from None
 
         frame = yield self.clip.get_frame_async(item)
-        rgb24: Future = self.to_rgb32(frame).get_frame_async(0)
-        compat: Future = self.to_compat_rgb32(frame).get_frame_async(0)
+        wrapped = self._wrap_frame(frame)
+        _rgb24: Future = self.to_rgb32(wrapped)
+        rgb24 = _rgb24.get_frame_async(0)
+        compat: Future = self.to_compat_rgb32(_rgb24).get_frame_async(0)
 
         (yield gather([rgb24, compat]))
         rgb24_frame, compat_frame = rgb24.result(), compat.result()
