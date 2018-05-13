@@ -29,12 +29,13 @@ from yuuno import Yuuno
 from yuuno.utils import future_yield_coro, gather
 from yuuno.clip import Frame, Size, RawFormat
 from yuuno.vs.extension import VapourSynth
-from yuuno.vs.utils import get_proxy_or_core, is_single, COMPATBGR_IS_XRGB
+from yuuno.vs.utils import get_proxy_or_core, is_single
+from yuuno.vs.flags import Features
 from yuuno.vs.alpha import AlphaOutputClip
 
 
 # On MAC OSX VapourSynth<=R43 is actually returned as XRGB instead of RGBX
-COMPAT_PIXEL_FORMAT = "XRGB" if COMPATBGR_IS_XRGB else "BGRX"
+COMPAT_PIXEL_FORMAT = "XRGB" if Features.COMPATBGR_IS_XRGB else "BGRX"
 
 
 def calculate_size(frame: VideoFrame, planeno: int) -> Tuple[int, int]:
@@ -112,28 +113,11 @@ def extract_plane_new(frame, planeno, *, compat=False, direction=-1, raw=False):
         else:
             return Image.frombuffer('RGB', (width, height), bytes(arr), "raw", COMPAT_PIXEL_FORMAT, stride, direction)
 
-@overload
-def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False , direction: int = -1, raw=True) -> bytes: pass
-@overload
-def extract_plane(frame: VideoFrame, planeno: int, *, compat: bool=False, direction: int = -1, raw=False) -> Image.Image: pass
-def extract_plane(frame, planeno, *, compat=False, direction=-1, raw=False):
-    """
-    Extracts the plane.
 
-    Will use the new VapourSynth API for extracting the plane that has been added in R37 when available.
-    On older systems it will use the more error-prone get_read_ptr-API.
-
-    :param frame:   The frame
-    :param planeno: The plane number
-    :param compat:  Are we dealing with a compat format.
-    :param direction: -1 bottom to top, 1 top to bottom
-    :param raw:       Return bytes instead of an image.
-    :return: The extracted image.
-    """
-    if hasattr(VideoFrame, 'get_read_array'):
-        return extract_plane_new(frame, planeno, compat=compat, direction=direction, raw=raw)
-    else:
-        return extract_plane_r36compat(frame, planeno, compat=compat, direction=direction, raw=raw)
+if Features.EXTRACT_VIA_ARRAY:
+    extract_plane = extract_plane_new
+else:
+    extract_plane = extract_plane_r36compat
 
 
 class VapourSynthFrameWrapper(HasTraits, Frame):

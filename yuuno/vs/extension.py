@@ -35,6 +35,7 @@ from yuuno.core.registry import Registry
 
 from yuuno.vs.utils import get_proxy_or_core
 from yuuno.vs.utils import MessageLevel, is_single
+from yuuno.vs.flags import Features
 from yuuno.vs.alpha import AlphaOutputClip
 
 from yuuno.multi_scripts.subprocess.provider import ScriptProviderRegistration
@@ -123,12 +124,7 @@ Settings to a value less than one makes it default to the number of hardware thr
 
     @classmethod
     def is_supported(cls):
-        try:
-            import vapoursynth
-        except ImportError:
-            return False
-
-        return hasattr(vapoursynth, 'construct_signature')
+        return Features.NOT_SUPPORTED
 
     @property
     def resize_filter(self) -> TCallable[['vs.VideoNode', 'int'], 'vs.VideoNode']:
@@ -164,15 +160,6 @@ Settings to a value less than one makes it default to the number of hardware thr
     def can_hook_log(self):
         return self.hook_messages and is_single()
 
-    @property
-    def can_mutli_env_natively(self):
-        """
-        Yuuno's Multi-Environment-Feature assumes that it is threadsafe
-        to use multiple environments.
-        """
-        import vapoursynth
-        return hasattr(vapoursynth, 'vpy_current_environment')
-
     def initialize_hook(self, vapoursynth):
         if self.can_hook_log:
             vapoursynth.set_message_handler(self._on_vs_log)
@@ -186,7 +173,6 @@ Settings to a value less than one makes it default to the number of hardware thr
 
     def initialize_registry(self):
         self.parent.log.debug("Registering wrappers.")
-        import vapoursynth
         from vapoursynth import VideoNode, VideoFrame
         from yuuno.vs.clip import VapourSynthClip, VapourSynthFrame
         from yuuno.vs.clip import VapourSynthAlphaClip
@@ -200,7 +186,7 @@ Settings to a value less than one makes it default to the number of hardware thr
         self.registry.register(wrapperfunc(VapourSynthClip), VideoNode)
         self.registry.register(wrapperfunc(VapourSynthFrame), VideoFrame)
         self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputClip)
-        if hasattr(vapoursynth, 'AlphaOutputTuple'):
+        if Features.SUPPORT_ALPHA_OUTPUT_TUPLE:
             # Required so that IPython automatically supports alpha outputs
             from vapoursynth import AlphaOutputTuple
             self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputTuple)
@@ -220,7 +206,7 @@ Settings to a value less than one makes it default to the number of hardware thr
         ))
 
         # Check support for vapoursynth/#389 at R44
-        if not self.can_mutli_env_natively:
+        if Features.EXPORT_VSSCRIPT_ENV:
             self.parent.log.info("Yuuno doesn't support VSScript for VS<R44")
             return
 
@@ -250,5 +236,6 @@ Settings to a value less than one makes it default to the number of hardware thr
             import vapoursynth
             vapoursynth.set_message_handler(None)
 
-        if self.can_mutli_env_natively and self.script_manager is not None:
+        if Features.EXPORT_VSSCRIPT_ENV in Features.current and \
+                self.script_manager is not None:
             self.script_manager.disable()

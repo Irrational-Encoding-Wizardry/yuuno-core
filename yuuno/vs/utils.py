@@ -17,15 +17,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import enum
 import types
-import platform
 from typing import AnyStr, Callable
 
 from traitlets.utils.importstring import import_item
-
-# Here are Version-Specific Flags that do not directly depend
-# on the VapourSynth Module.
-IS_MACOS = platform.system() == 'Darwin'
-COMPATBGR_IS_XRGB = IS_MACOS
+from yuuno.vs.flags import Features
 
 
 def get_proxy_or_core(*, resolve_proxy=False):
@@ -34,14 +29,14 @@ def get_proxy_or_core(*, resolve_proxy=False):
     :param resolve_proxy: If you have R37 or later, force resolving the proxy object
     :return: A proxy or the actual core.
     """
-    try:
+    if Features.SUPPORT_CORE_PROXY:
         from vapoursynth import core
         if resolve_proxy:
             core = core.core
-    except ImportError:
+        return core
+    else:
         from vapoursynth import get_core
         core = get_core()
-    return core
 
 
 def filter_or_import(name: AnyStr) -> Callable:
@@ -62,9 +57,10 @@ def filter_or_import(name: AnyStr) -> Callable:
 
 def is_single():
     import vapoursynth
-    if not hasattr(vapoursynth, 'Environment'):
+    if Features.EXPORT_VSSCRIPT_ENV:
+        return vapoursynth.Environment.is_single()
+    else:
         return vapoursynth._using_vsscript
-    return vapoursynth.Environment.is_single()
 
 
 class MessageLevel(enum.IntEnum):
@@ -83,7 +79,7 @@ class VapourSynthEnvironment(object):
     @staticmethod
     def get_global_outputs():
         import vapoursynth
-        if hasattr(vapoursynth, "get_outputs"):
+        if Features.EXPORT_OUTPUT_DICT:
             return vapoursynth.get_outputs()
         return types.MappingProxyType(vapoursynth._get_output_dict("OutputManager.get_outputs"))
 

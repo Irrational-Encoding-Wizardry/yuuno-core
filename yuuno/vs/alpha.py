@@ -18,28 +18,23 @@
 import abc
 from typing import TYPE_CHECKING
 from collections.abc import Sequence
+from yuuno.vs.flags import Features
 
 if TYPE_CHECKING:
     import vapoursynth as vs
 
 
 class AlphaOutputClipMeta(abc.ABCMeta):
-    IS_VS43 = None
-
-    VideoNode = None
-    AlphaOutputTuple = None
+    vs = None
 
     def __subclasscheck__(self, subclass):
-        if self.IS_VS43 is None:
-            import vapoursynth
-            self.IS_VS43 = hasattr(vapoursynth, 'AlphaOutputTuple')
-            self.VideoNode = vapoursynth.VideoNode
+        if self.vs is None:
+            import vapoursynth as vs
+            self.vs = vs
 
-            if self.IS_VS43:
-                self.AlphaOutputTuple = vapoursynth.AlphaOutputTuple
+        if Features.SUPPORT_ALPHA_OUTPUT_TUPLE:
 
-        if self.IS_VS43:
-            return issubclass(self.AlphaOutputTuple, subclass)
+            return issubclass(self.vs.AlphaOutputTuple, subclass)
 
         return False
 
@@ -55,7 +50,7 @@ class AlphaOutputClipMeta(abc.ABCMeta):
         if len(obj) != 2:
             return False
 
-        return all(i is None or isinstance(i, self.VideoNode) for i in obj)
+        return all(i is None or isinstance(i, self.vs.VideoNode) for i in obj)
 
 
 class AlphaOutputClip(metaclass=AlphaOutputClipMeta):
