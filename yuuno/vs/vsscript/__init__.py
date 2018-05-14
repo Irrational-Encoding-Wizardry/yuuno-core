@@ -15,20 +15,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import pkg_resources
+from yuuno.vs.vsscript.vs_capi import enable_vsscript, disable_vsscript
 
-
-def discover_environments(module_dict):
-    all_exts = []
-    for ep in pkg_resources.iter_entry_points('yuuno.environments'):
-        module_dict[ep.name] = ep.load()
-        all_exts.append(ep.name)
-    return all_exts
-
-
-def discover_extensions():
-    for ep in pkg_resources.iter_entry_points('yuuno.extensions'):
-        extension = ep.load()
-        if hasattr(extension, '_name'):
-            extension._name = ep.name
-        yield extension
+__all__ = ['Script']

@@ -15,12 +15,12 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import abc
 import enum
 import types
 from typing import AnyStr, Callable
 
 from traitlets.utils.importstring import import_item
+from yuuno.vs.flags import Features
 
 
 def get_proxy_or_core(*, resolve_proxy=False):
@@ -29,14 +29,14 @@ def get_proxy_or_core(*, resolve_proxy=False):
     :param resolve_proxy: If you have R37 or later, force resolving the proxy object
     :return: A proxy or the actual core.
     """
-    try:
+    if Features.SUPPORT_CORE_PROXY:
         from vapoursynth import core
         if resolve_proxy:
             core = core.core
-    except ImportError:
+        return core
+    else:
         from vapoursynth import get_core
         core = get_core()
-    return core
 
 
 def filter_or_import(name: AnyStr) -> Callable:
@@ -55,16 +55,19 @@ def filter_or_import(name: AnyStr) -> Callable:
         return import_item(name)
 
 
-def is_version(version_number):
-    core = get_proxy_or_core(resolve_proxy=True)
-    return core.version_number() >= version_number
+def is_single():
+    import vapoursynth
+    if Features.EXPORT_VSSCRIPT_ENV:
+        return vapoursynth.Environment.is_single()
+    else:
+        return vapoursynth._using_vsscript
 
 
 class MessageLevel(enum.IntEnum):
-    mtDebug = enum.auto()
-    mtWarning = enum.auto()
-    mtCritical = enum.auto()
-    mtFatal = enum.auto()
+    mtDebug = 0
+    mtWarning = 1
+    mtCritical = 2
+    mtFatal = 3
 
 
 class VapourSynthEnvironment(object):
@@ -76,7 +79,7 @@ class VapourSynthEnvironment(object):
     @staticmethod
     def get_global_outputs():
         import vapoursynth
-        if hasattr(vapoursynth, "get_outputs"):
+        if Features.EXPORT_OUTPUT_DICT:
             return vapoursynth.get_outputs()
         return types.MappingProxyType(vapoursynth._get_output_dict("OutputManager.get_outputs"))
 
@@ -100,5 +103,3 @@ class VapourSynthEnvironment(object):
         self.previous_outputs = self.get_global_outputs().copy()
         self._set_outputs(self.old_outputs)
         self.old_outputs = None
-
-

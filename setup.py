@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Yuuno - IPython + VapourSynth
-# Copyright (C) 2017 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
+# Copyright (C) 2017,2018 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
@@ -16,19 +16,18 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
 from setuptools import setup, find_packages
 
-with open('README.rst') as readme_file:
+with open('README.rst', encoding="utf-8") as readme_file:
     readme = readme_file.read()
 
-with open('HISTORY.rst') as history_file:
+with open('HISTORY.rst', encoding="utf-8") as history_file:
     history = history_file.read()
 
 requirements = [
     "traitlets",
-    "pillow"
+    "pillow",
+    "psutil"
 ]
 
 test_requirements = [
@@ -37,23 +36,21 @@ test_requirements = [
 
 extras_requires = {
     'vapoursynth': ['vapoursynth'],
-    'juptyter': ['yuuno-core']
 }
 
 setup(
     name='yuuno-core',
-    version='1.0.0.dev1',
-    description="Yuuno = Jupyter + VapourSynth",
+    version='1.0',
+    description="Yuuno-Core - Extract frames from videos.",
     long_description=readme + '\n\n' + history,
     author="stuxcrystal",
     author_email='stuxcrystal@encode.moe',
-    url='https://github.com/stuxcrystal/yuuno',
+    url='https://github.com/stuxcrystal/yuuno-core',
     packages=find_packages(exclude=("tests", )),
     package_dir={'yuuno': 'yuuno'},
-    package_data={'yuuno': ['data/*']},
     include_package_data=True,
     install_requires=requirements,
-    extras_requires=extras_requires,
+    extras_require=extras_requires,
     license="GNU Lesser General Public License v3 (LGPLv3)",
     zip_safe=False,
     keywords='yuuno',

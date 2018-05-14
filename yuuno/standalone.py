@@ -1,4 +1,4 @@
-# -*- encoding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 # Yuuno - IPython + VapourSynth
 # Copyright (C) 2018 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
@@ -15,20 +15,20 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import pkg_resources
 
 
-def discover_environments(module_dict):
-    all_exts = []
-    for ep in pkg_resources.iter_entry_points('yuuno.environments'):
-        module_dict[ep.name] = ep.load()
-        all_exts.append(ep.name)
-    return all_exts
+
+from yuuno.yuuno import Yuuno
+from yuuno.core.environment import Environment
 
 
-def discover_extensions():
-    for ep in pkg_resources.iter_entry_points('yuuno.extensions'):
-        extension = ep.load()
-        if hasattr(extension, '_name'):
-            extension._name = ep.name
-        yield extension
+class StandaloneEnvironment(Environment):
+    pass
+
+
+def init_standalone(*, additional_extensions=()) -> Yuuno:
+    y = Yuuno.instance(parent=None)
+    y.environment = StandaloneEnvironment()
+    y.environment.additional_extensions = lambda: list(additional_extensions)
+    y.start()
+    return y

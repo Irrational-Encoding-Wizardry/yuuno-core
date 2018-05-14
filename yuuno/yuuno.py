@@ -16,11 +16,10 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import types
-from typing import Dict as TDict, Sequence, Type, TypeVar, Optional
+from typing import Union, Sequence, Type, TypeVar, Optional
 
 from traitlets.utils.importstring import import_item
-from traitlets import Instance, List, Dict
+from traitlets import Instance, List
 from traitlets import default
 
 from yuuno.core.environment import Environment
@@ -39,7 +38,7 @@ class Yuuno(Settings):
     """
 
     environment: Environment = Instance(Environment)
-    extensions: Sequence[Type[Extension]] = List(Instance(Extension))
+    extensions: Sequence[Extension] = List(Instance(Extension))
 
     output: YuunoImageOutput = Instance(YuunoImageOutput)
     namespace: Namespace = Instance(Namespace)
@@ -52,22 +51,29 @@ class Yuuno(Settings):
     def _default_namespace(self):
         return Namespace()
 
+    def _actual_extensions(self):
+        return self.extension_types + self.environment.additional_extensions()
+
     def _load_extensions(self) -> Sequence[Extension]:
         exts = []
-        for extension in self.extension_types:
+        for extension in self._actual_extensions():
             if callable(extension):
                 ext_cls = extension
             else:
                 ext_cls = import_item(extension)
             if not ext_cls.is_supported():
-                self.log.info(f"Yuuno-Extension {ext_cls.__name__} reported that it is not supported on this system.")
+                self.log.info(f"Yuuno-Extension {ext_cls.get_name()} reported that it is not supported on this system.")
                 continue
+            else:
+                self.log.debug(f"Yuuno-Extension {ext_cls.get_name()} loaded.")
 
             exts.append(ext_cls(parent=self))
         return exts
 
     def _initialize_extensions(self) -> None:
         self.extensions = self._load_extensions()
+        self.environment.post_extension_load()
+
         failed_extensions = []
         for extension in self.extensions:
             try:
@@ -77,6 +83,9 @@ class Yuuno(Settings):
                 import traceback
                 traceback.print_exception(type(e), e, e.__traceback__)
 
+            else:
+                self.log.debug(f"Yuuno-Extension {extension.get_name()} initialized.")
+
         for extension in failed_extensions:
             self.extensions.remove(extension)
 
@@ -84,13 +93,18 @@ class Yuuno(Settings):
         for extension in reversed(self.extensions):
             extension.deinitialize()
 
-    def get_extension(self, cls: Type[T]) -> Optional[T]:
+    def get_extension(self, cls: Union[Type[T], str]) -> Optional[T]:
         """
         Returns the loaded extension given by type.
         :param cls:  The class of the object.
         :return: The given extension or None
         """
         for extension in self.extensions:
+            if isinstance(cls, str):
+                if extension.get_name() == cls:
+                    return extension
+                continue
+
             if isinstance(extension, cls):
                 return extension
         return None

@@ -113,7 +113,11 @@ class TestVapourSynth(unittest.TestCase):
 
     def test_003_vapoursynth_frame_extract(self):
         from yuuno.vs.clip import VapourSynthFrameWrapper
-        fw = VapourSynthFrameWrapper(frame=self.black_clip.get_frame(0), compat_frame=self.black_compat.get_frame(0))
+        fw = VapourSynthFrameWrapper(
+            frame=self.black_clip.get_frame(0),
+            rgb_frame=self.black_clip.get_frame(0),
+            compat_frame=self.black_compat.get_frame(0)
+        )
         im = fw.to_pil()
 
         self.assertEqual(im.width, self.black_clip.width)
@@ -137,7 +141,7 @@ class TestVapourSynth(unittest.TestCase):
 
         self.assertEqual(len(VapourSynthClip(self.black_clip)), len(self.black_clip))
 
-        cpf = VapourSynthClip(self.black_clip_yuv444)[0].compat_frame
+        cpf = VapourSynthClip(self.black_clip_yuv444)[0].result().compat_frame
         self.assertEqual(cpf.format.id, self.vs.COMPATBGR32)
         self.assertEqual(cpf.width, self.black_clip_yuv444.width)
         self.assertEqual(cpf.height, self.black_clip_yuv444.height)
@@ -147,7 +151,7 @@ class TestVapourSynth(unittest.TestCase):
 
         self.assertEqual(len(VapourSynthFrame(self.black_clip.get_frame(0))), 1)
 
-        cpf = VapourSynthFrame(self.black_clip_yuv444.get_frame(0))[0].compat_frame
+        cpf = VapourSynthFrame(self.black_clip_yuv444.get_frame(0))[0].result().compat_frame
         self.assertEqual(cpf.format.id, self.vs.COMPATBGR32)
         self.assertEqual(cpf.width, self.black_clip_yuv444.width)
         self.assertEqual(cpf.height, self.black_clip_yuv444.height)

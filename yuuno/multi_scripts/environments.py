@@ -15,20 +15,19 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import pkg_resources
+from typing import Callable, Any, MutableMapping
+from yuuno.multi_scripts.subprocess.proxy import Request
 
 
-def discover_environments(module_dict):
-    all_exts = []
-    for ep in pkg_resources.iter_entry_points('yuuno.environments'):
-        module_dict[ep.name] = ep.load()
-        all_exts.append(ep.name)
-    return all_exts
+class RequestManager:
 
+    handlers: MutableMapping[str, Callable[[Request], Any]]
 
-def discover_extensions():
-    for ep in pkg_resources.iter_entry_points('yuuno.extensions'):
-        extension = ep.load()
-        if hasattr(extension, '_name'):
-            extension._name = ep.name
-        yield extension
+    def register_command(self, name: str, cb: Callable[[Request], Any]) -> None:
+        """
+        Registers a new command.
+        :param name:   The name of the
+        :param cb:
+        :return:
+        """
+        self.handlers[name] = cb

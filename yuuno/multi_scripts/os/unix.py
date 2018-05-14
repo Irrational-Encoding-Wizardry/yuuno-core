@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 
 # Yuuno - IPython + VapourSynth
-# Copyright (C) 2018 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
+# Copyright (C) 2017 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
@@ -15,20 +15,14 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import pkg_resources
 
 
-def discover_environments(module_dict):
-    all_exts = []
-    for ep in pkg_resources.iter_entry_points('yuuno.environments'):
-        module_dict[ep.name] = ep.load()
-        all_exts.append(ep.name)
-    return all_exts
+import signal
+import subprocess
 
 
-def discover_extensions():
-    for ep in pkg_resources.iter_entry_points('yuuno.extensions'):
-        extension = ep.load()
-        if hasattr(extension, '_name'):
-            extension._name = ep.name
-        yield extension
+popen = subprocess.Popen
+
+
+def interrupt_process(process):
+    process.send_signal(signal.SIGINT)

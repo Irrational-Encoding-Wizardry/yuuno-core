@@ -15,8 +15,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
 from typing import List as TList, Callable as TCallable, Dict as TDict
 from typing import Any as TAny, AnyStr
 from typing import Iterator, Tuple as TTuple

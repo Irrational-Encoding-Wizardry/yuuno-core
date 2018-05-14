@@ -16,27 +16,25 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+from typing import TYPE_CHECKING
 from collections.abc import Sequence
+from yuuno.vs.flags import Features
 
-from yuuno.vs.utils import is_version
+if TYPE_CHECKING:
+    import vapoursynth as vs
+
 
 class AlphaOutputClipMeta(abc.ABCMeta):
-    IS_VS43 = None
-
-    VideoNode = None
-    AlphaOutputTuple = None
+    vs = None
 
     def __subclasscheck__(self, subclass):
-        if self.IS_VS43 is None:
-            import vapoursynth
-            self.IS_VS43 = is_version(43)
-            self.VideoNode = vapoursynth.VideoNode
+        if self.vs is None:
+            import vapoursynth as vs
+            self.vs = vs
 
-            if self.IS_VS43:
-                self.AlphaOutputTuple = vapoursynth.AlphaOutputTuple
+        if Features.SUPPORT_ALPHA_OUTPUT_TUPLE:
 
-        if self.IS_VS43:
-            return issubclass(self.AlphaOutputTuple, subclass)
+            return issubclass(self.vs.AlphaOutputTuple, subclass)
 
         return False
 
@@ -52,9 +50,9 @@ class AlphaOutputClipMeta(abc.ABCMeta):
         if len(obj) != 2:
             return False
 
-        return all(i is None or isinstance(i, self.VideoNode) for i in obj)
+        return all(i is None or isinstance(i, self.vs.VideoNode) for i in obj)
 
 
 class AlphaOutputClip(metaclass=AlphaOutputClipMeta):
-    pass
-
+    def __getitem__(self, item: int) -> 'vs.VideoNode': pass
+    def __len__(self) -> int: pass
