@@ -2,6 +2,16 @@
 History
 =======
 
+1.0.0 (Khepri)
+--------------
+
+* Split up Yuuno into Yuuno for IPython and Yuuno-core
+* Allow autodiscover of additional Yuuno-extensions.
+* Allow autodiscover of additional Yuuno-environments.
+* Fix incorrect endianness of COMPAT-Formats in MAC OS X.
+* Implement "Script"-Environments. This allows to use VSScript or subprocess. This allows to use Yuuno for editors.
+* Hook the VapourSynth log-system.
+
 0.8.0 (Glastig Uaine)
 ---------------------
 
