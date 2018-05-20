@@ -39,7 +39,8 @@ class MultiScriptExtension(Extension):
         self.providers = {}
 
     def initialize(self):
-        pass
+        from yuuno.multi_scripts.subprocess import SubprocessScriptManager
+        self.register_manager('mutli-process', SubprocessScriptManager())
 
     def register_manager(self, name: str, manager: 'ScriptManager'):
         """

@@ -248,14 +248,14 @@ class Subprocess(Script):
 
     running: bool
 
-    def __init__(self, pool: Pool, provider_info: ScriptProviderInfo):
+    def __init__(self, pool: Pool, default_provider_info: ScriptProviderInfo):
         self.process = None
         self.pool = pool
         self.self_read, self.self_write = Pipe(duplex=False)
         self.child_read, self.child_write = Pipe(duplex=False)
         self.requester = Requester(self.child_read, self.self_write)
 
-        self.provider_info = provider_info
+        self.provider_info = default_provider_info
 
         # Allow an 8K image to be transmitted.
         # This should be enough.
@@ -279,13 +279,16 @@ class Subprocess(Script):
     def alive(self) -> bool:
         return self.running and self.process is not None and self.process.is_alive()
 
-    def initialize(self):
+    def initialize(self, *, provider_info=None, **_):
         if self.alive:
             return
         if self.running:
             raise ValueError("Already disposed!")
 
-        self.self_write.send(self.provider_info)
+        if provider_info is None:
+            provider_info = self.provider_info
+
+        self.self_write.send(provider_info)
 
         # Block until initialization completes.
         self.child_read.recv()

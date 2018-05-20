@@ -30,14 +30,14 @@ class SubprocessScriptManager(ScriptManager):
     """
 
     instances: Dict[str, Subprocess]
-    starter: ScriptProviderInfo
+    default_provider_info: ScriptProviderInfo
 
     pool: Pool
     _next_process: Subprocess
 
-    def __init__(self, starter: ScriptProviderInfo):
+    def __init__(self, default_provider_info=None):
         self.instances = {}
-        self.starter = starter
+        self.default_provider_info = default_provider_info
         ctx: Context = get_context("spawn")
         self.pool = ctx.Pool()
         self._next_process = None
@@ -45,10 +45,10 @@ class SubprocessScriptManager(ScriptManager):
 
     def _checkout_next(self):
         prev = self._next_process
-        self._next_process = Subprocess(self.pool, self.starter)
+        self._next_process = Subprocess(self.pool, self.default_provider_info)
         return prev
 
-    def create(self, name: str, *, initialize=False) -> Script:
+    def create(self, name: str, *, initialize=False, provider_info=None, **config) -> Script:
         """
         Creates a new script environment.
         """
@@ -56,8 +56,12 @@ class SubprocessScriptManager(ScriptManager):
             raise ValueError("A core with this name already exists.")
         process = self._checkout_next()
         self.instances[name] = process
+
+        if provider_info is None:
+            provider_info = self.default_provider_info
+
         if initialize:
-            process.initialize()
+            process.initialize(provider_info=provider_info, **config)
         return process
 
     def get(self, name: str) -> Optional[Script]:

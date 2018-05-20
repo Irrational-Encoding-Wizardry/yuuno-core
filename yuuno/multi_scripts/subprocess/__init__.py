@@ -15,3 +15,10 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from yuuno.multi_scripts.subprocess.manager import SubprocessScriptManager
+from yuuno.multi_scripts.subprocess.provider import ScriptProviderRegistration
+
+
+__all__ = [
+    'SubprocessScriptManager', 'ScriptProviderRegistration'
+]
