@@ -47,12 +47,6 @@ class Future(Generic[T]):
     def add_done_callback(self, cb: 'Future[T]') -> None: pass
 
 
-if TYPE_CHECKING:
-    from asyncio import Future as AIOFut
-    Future.register(AIOFut)
-Future.register(ConcFuture)
-
-
 def inline_resolved(func: Callable[..., T]) -> Callable[..., Future[T]]:
     @functools.wraps(func)
     def _wrapped(*args, **kwargs) -> Future:
