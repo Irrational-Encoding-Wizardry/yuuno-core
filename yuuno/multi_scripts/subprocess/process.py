@@ -206,6 +206,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         MAIN_LOGGER.info("Preloading.")
         from yuuno import init_standalone
         y = init_standalone()
+        y.log = MAIN_LOGGER
         y.start()
         y.stop()
         MAIN_LOGGER.info("Preload complete.")
@@ -248,9 +249,11 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
         except EOFError:
             MAIN_LOGGER.info("Stopped before deploy!")
             return
+        else:
+            MAIN_LOGGER.info(f"Deploying: {env._provider_meta}")
 
         yuuno.start()
-        MAIN_LOGGER.info(f"Deployed {env._provider_meta}")
+        MAIN_LOGGER.info("Deploy complete")
 
         # Run the environment
         env.run()
