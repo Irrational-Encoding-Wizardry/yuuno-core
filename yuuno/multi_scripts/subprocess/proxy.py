@@ -23,6 +23,8 @@ from typing import MutableMapping, Mapping, Optional, Any, Callable, Union
 from typing import NamedTuple, List
 from concurrent.futures import Future
 
+from yuuno.multi_scripts.subprocess.logger import MAIN_LOGGER
+
 
 class Response(NamedTuple):
     id: int
@@ -105,7 +107,7 @@ class Responder(Handler):
         self.handlers = handlers
 
     def _handle(self, obj: Request):
-        print(os.getpid(), ">", obj)
+        MAIN_LOGGER.debug(f"> {repr(obj)}")
         if obj.type not in self.handlers:
             self._send(obj.fail(NotImplementedError("Request not supported")))
             return
@@ -125,7 +127,7 @@ class Responder(Handler):
         self.send(resp)
         if resp.protected:
             resp = "(protected)"
-        print(os.getpid(), ">", resp)
+        MAIN_LOGGER.debug(f"> {resp}")
 
 
 class Requester(Handler):

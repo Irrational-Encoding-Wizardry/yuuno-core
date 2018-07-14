@@ -29,7 +29,7 @@ from multiprocessing import Pipe, Pool, Process
 from multiprocessing.sharedctypes import RawArray as Array
 from multiprocessing.connection import Connection
 
-from typing import List, Callable, Any, NamedTuple, Sequence, Dict, Union
+from typing import List, Callable, Any, NamedTuple, Sequence, Dict, Union, Optional
 from typing import TYPE_CHECKING
 
 from traitlets.utils.importstring import import_item
@@ -41,12 +41,18 @@ from yuuno.core.environment import Environment
 from yuuno.multi_scripts.utils import ConvertingMappingProxy
 from yuuno.multi_scripts.script import Script
 from yuuno.multi_scripts.environments import RequestManager
+from yuuno.multi_scripts.subprocess.logger import MAIN_LOGGER
 from yuuno.multi_scripts.subprocess.provider import ScriptProviderInfo, ScriptProvider
 from yuuno.multi_scripts.subprocess.proxy import Responder, Requester
 from yuuno.multi_scripts.subprocess.clip import ProxyClip
 
 if TYPE_CHECKING:
     from yuuno.clip import Clip
+
+
+class PreloaderConfig(NamedTuple):
+    preloader_script: str
+    preloader_config: Dict[str, Any]
 
 
 # This sets the size of the frame-buffer.
@@ -197,37 +203,54 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
 
     @staticmethod
     def _preload():
-        print(os.getpid(), ">", "Preloading.")
+        MAIN_LOGGER.info("Preloading.")
         from yuuno import init_standalone
         y = init_standalone()
         y.start()
         y.stop()
-        print(os.getpid(), ">", "Preload complete.")
+        MAIN_LOGGER.info("Preload complete.")
 
     @staticmethod
     def _check_parent():
         import psutil
         current = psutil.Process()
         current.parent().wait()
-        print(os.getpid(), ">", "Parent died. Kill own process...")
+        MAIN_LOGGER.warning("Parent died. Kill own process...")
         current.kill()
 
+    @staticmethod
+    def _default_preload():
+        import logging
+        logging.getLogger().handlers = []
+
     @classmethod
-    def execute(cls, read: Connection, write: Connection, framebuffer: Array):
+    def execute(cls, read: Connection, write: Connection, framebuffer: Array, preloader: Optional[PreloaderConfig]):
+        if preloader is not None:
+            script = compile(preloader.preloader_script, '<preloader>', mode='exec')
+            exec(script, {'config': preloader.preloader_config}, {})
+        else:
+            cls._default_preload()
+
         cls._preload()
         Thread(target=cls._check_parent,  daemon=True).start()
 
         from yuuno import Yuuno
         yuuno = Yuuno.instance(parent=None)
+        yuuno.log = MAIN_LOGGER
         env = cls(parent=yuuno, read=read, write=write)
         env._framebuffer = framebuffer
         yuuno.environment = env
 
         # Wait for the ProviderMeta to be set.
-        print(os.getpid(), ">", "Ready to deploy!")
-        env._provider_meta = read.recv()
+        MAIN_LOGGER.info("Ready to deploy!")
+        try:
+            env._provider_meta = read.recv()
+        except EOFError:
+            MAIN_LOGGER.info("Stopped before deploy!")
+            return
+
         yuuno.start()
-        print(os.getpid(), ">", "Deployed", env._provider_meta)
+        MAIN_LOGGER.info(f"Deployed {env._provider_meta}")
 
         # Run the environment
         env.run()
@@ -238,6 +261,7 @@ class LocalSubprocessEnvironment(RequestManager, Environment):
 
 class Subprocess(Script):
     process: Process
+    preloader: Optional[PreloaderConfig]
     self_read: Connection
     self_write: Connection
     child_read: Connection
@@ -248,7 +272,8 @@ class Subprocess(Script):
 
     running: bool
 
-    def __init__(self, pool: Pool, default_provider_info: ScriptProviderInfo):
+    def __init__(self, pool: Pool, default_provider_info: ScriptProviderInfo, preloader: Optional[PreloaderConfig]):
+        self.preloader = preloader
         self.process = None
         self.pool = pool
         self.self_read, self.self_write = Pipe(duplex=False)
@@ -270,7 +295,8 @@ class Subprocess(Script):
             target=LocalSubprocessEnvironment.execute,
             args=(
                 self.self_read, self.child_write,           # Commands
-                self._fb
+                self._fb,
+                self.preloader
             )
         )
         self.process.start()

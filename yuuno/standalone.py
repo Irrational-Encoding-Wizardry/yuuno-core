@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
+import logging
 from yuuno.yuuno import Yuuno
 from yuuno.core.environment import Environment
 
@@ -28,6 +27,7 @@ class StandaloneEnvironment(Environment):
 
 def init_standalone(*, additional_extensions=()) -> Yuuno:
     y = Yuuno.instance(parent=None)
+    y.log = logging.getLogger('Yuuno')
     y.environment = StandaloneEnvironment()
     y.environment.additional_extensions = lambda: list(additional_extensions)
     y.start()

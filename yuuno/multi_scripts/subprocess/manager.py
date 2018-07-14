@@ -15,12 +15,12 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from typing import Optional, Dict
+from typing import Optional, Dict, NamedTuple, Any
 from multiprocessing import Pool, get_context
 from multiprocessing.context import BaseContext as Context
 
 from yuuno.multi_scripts.script import ScriptManager, Script
-from yuuno.multi_scripts.subprocess.process import Subprocess
+from yuuno.multi_scripts.subprocess.process import Subprocess, PreloaderConfig
 from yuuno.multi_scripts.subprocess.provider import ScriptProviderInfo
 
 
@@ -30,13 +30,15 @@ class SubprocessScriptManager(ScriptManager):
     """
 
     instances: Dict[str, Subprocess]
+    preloader: Optional[PreloaderConfig]
     default_provider_info: ScriptProviderInfo
 
     pool: Pool
     _next_process: Subprocess
 
-    def __init__(self, default_provider_info=None):
+    def __init__(self, default_provider_info=None, preloader=None):
         self.instances = {}
+        self.preloader = preloader
         self.default_provider_info = default_provider_info
         ctx: Context = get_context("spawn")
         self.pool = ctx.Pool()
@@ -45,7 +47,7 @@ class SubprocessScriptManager(ScriptManager):
 
     def _checkout_next(self):
         prev = self._next_process
-        self._next_process = Subprocess(self.pool, self.default_provider_info)
+        self._next_process = Subprocess(self.pool, self.default_provider_info, self.preloader)
         return prev
 
     def create(self, name: str, *, initialize=False, provider_info=None, **config) -> Script:
