@@ -105,13 +105,15 @@ Settings to a value less than one makes it default to the number of hardware thr
             if name is None:
                 core.num_threads = self.core_num_threads
                 core.add_cache = self.core_add_cache
-                core.accept_lowercase = self.core_accept_lowercase
+
+                if hasattr(core, 'accept_lowercase'):
+                    core.accept_lowercase = self.core_accept_lowercase
 
                 # There is no obvious default for max_cache_size
                 if self.core_max_cache_size is not None:
                     core.max_cache_size = self.core_max_cache_size
 
-            else:
+            elif hasattr(core, name):
                 setattr(core, name, change.new)
         return _func
 
