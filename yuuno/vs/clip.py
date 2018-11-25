@@ -240,7 +240,7 @@ class VapourSynthClipMixin(HasTraits):
     def __getitem__(self, item) -> VapourSynthFrameWrapper:
         if not is_single():
             try:
-                get_proxy_or_core().std.BlankClip(self.clip)
+                get_proxy_or_core().std.BlankClip()
             except vs.Error:
                 raise RuntimeError("Tried to access clip of a dead core.") from None
 

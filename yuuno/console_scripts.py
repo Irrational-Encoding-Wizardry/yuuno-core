@@ -26,3 +26,7 @@ def main():
     del sys.argv[0]
 
     commands[command]()
+
+
+if __name__ == '__main__':
+    main()
