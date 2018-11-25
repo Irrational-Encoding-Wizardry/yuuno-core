@@ -2,6 +2,21 @@
 History
 =======
 
+1.1.0 (Skidmark)
+----------------
+
+* Nothing changed. I just wanted to make sure the Yuuno4Ipython versions match with Yuuno-Core version.
+
+1.0.2 (Khepri)
+--------------
+
+* Made compatible with VapourSynth R45
+
+1.0.1 (Khepri)
+--------------
+
+* Fixed incompatibility with Python 3.7
+
 1.0.0 (Khepri)
 --------------
 
