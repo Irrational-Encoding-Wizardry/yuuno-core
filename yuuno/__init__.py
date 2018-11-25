@@ -21,12 +21,12 @@ import sys
 
 __author__ = """stuxcrystal"""
 __email__ = 'stuxcrystal@encode.moe'
-__version__ = '1.0.2'
+__version__ = '1.1'
 
 
 if sys.version_info < (3, 6):
     raise ImportError(
-        "Yuuno now requires Python 3.6."
+        "Yuuno requires Python 3.6. "
         "Please make sure you are using this version."
     )
 

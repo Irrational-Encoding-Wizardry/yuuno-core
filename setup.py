@@ -40,7 +40,7 @@ extras_requires = {
 
 setup(
     name='yuuno-core',
-    version='1.0.2',
+    version='1.1.dev1',
     description="Yuuno-Core - Extract frames from videos.",
     long_description=readme + '\n\n' + history,
     author="stuxcrystal",
@@ -70,6 +70,9 @@ setup(
         'Topic :: Multimedia :: Video :: Display',
         'Topic :: Multimedia :: Video :: Non-Linear Editor',
     ],
+    entry_points={
+        'console_scripts': ['yuuno=yuuno.console_scripts:main']
+    },
     test_suite='tests',
     tests_require=test_requirements
 )
