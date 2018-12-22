@@ -76,6 +76,8 @@ class VapourSynthEnvironment(object):
         self.previous_outputs = {}
         self.old_outputs = None
 
+    single = staticmethod(is_single)
+
     @staticmethod
     def get_global_outputs():
         import vapoursynth

@@ -2,10 +2,15 @@
 History
 =======
 
+1.2.0 (Chubster)
+----------------
+
+* Internal Stuff required for Yuuno4IPython.
+
 1.1.0 (Skidmark)
 ----------------
 
-* Nothing changed. I just wanted to make sure the Yuuno4Ipython versions match with Yuuno-Core version.
+* `yuuno` - A command for running and setting up stuff.
 
 1.0.2 (Khepri)
 --------------

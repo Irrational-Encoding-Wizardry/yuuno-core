@@ -27,7 +27,7 @@ from vapoursynth import VideoNode, VideoFrame
 
 from yuuno import Yuuno
 from yuuno.utils import future_yield_coro, gather
-from yuuno.clip import Frame, Size, RawFormat
+from yuuno.clip import Clip, Frame, Size, RawFormat
 from yuuno.vs.extension import VapourSynth
 from yuuno.vs.utils import get_proxy_or_core, is_single
 from yuuno.vs.flags import Features
@@ -186,7 +186,7 @@ class VapourSynthFrameWrapper(HasTraits, Frame):
         )
 
 
-class VapourSynthClipMixin(HasTraits):
+class VapourSynthClipMixin(HasTraits, Clip):
 
     clip: VideoNode
 
@@ -317,7 +317,7 @@ class VapourSynthAlphaFrameWrapper(HasTraits):
         return b"".join([self.clip.to_raw(), self.alpha.to_raw()])
 
 
-class VapourSynthAlphaClip:
+class VapourSynthAlphaClip(Clip):
 
     def __init__(self, clip):
         if not isinstance(clip, AlphaOutputClip):
