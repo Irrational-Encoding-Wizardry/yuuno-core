@@ -19,9 +19,7 @@ import math
 from enum import IntEnum
 from typing import TypeVar, NamedTuple, Tuple
 
-from PIL.Image import Image
-
-from yuuno.utils import inline_resolved, Future
+from yuuno.utils import inline_resolved, future_yield_coro, resolve, Future, gather
 
 
 T = TypeVar("T")
@@ -45,15 +43,56 @@ class ColorFamily(IntEnum):
 
 class RawFormat(NamedTuple):
     bits_per_sample: int
-    num_planes: int
+    num_fields: int
     family: ColorFamily
     sample_type: SampleType
     subsampling_h: int = 0
     subsampling_w: int = 0
+    packed: bool = True
+    planar: bool = True
 
     @property
     def bytes_per_sample(self) -> int:
-        return int(math.ceil(self.bits_per_sample/8))
+        # This is faster than
+        # int(ceil(bpp/8))
+        # and faster than (l,m=divmod(bpp,8); l+bool(m))
+        bpp = self.bits_per_sample
+        return (bpp//8)+(bpp%8 != 0)
+
+    @property
+    def num_planes(self) -> int:
+        if self.planar:
+            return self.num_fields
+        else:
+            return 1
+
+    def get_stride(self, plane: int, size: int) -> int:
+        stride = size.width * self.bytes_per_sample
+        if not self.packed:
+            stride += stride%4
+        return stride
+    
+    def get_plane_size(self, plane: int, size: Size) -> int:
+        """
+        Calcute the size of the plane in bytes.
+
+        :param plane:  The index of the plane.
+        :param size:   The size of the frame (on plane 0)
+        """
+        w, h = self.size()
+        if not planar:
+            return self.bytes_per_sample * self.num_fields * w * h
+
+        if 0 < plane < 4:
+            w >>= self.subsampling_w
+            h >>= self.subsampling_h
+
+        stride = w*self.bytes_per_sample
+        if not self.packed:
+            stride += stride%4
+
+        return h*stride
+
 RawFormat.SampleType = SampleType
 RawFormat.ColorFamily = ColorFamily
 
@@ -68,57 +107,115 @@ class Frame(object):
     This class represents a single frame out of a clip.
     """
 
-    def to_pil(self) -> Image:
+    def format(self) -> RawFormat:
         """
-        Generates an RGB (or RGBA) 8bit PIL-Image from the frame.
-        :return: A PIL-Image with the frame data.
+        Returns the raw-format of the image.
+        :return: The raw-format of the image.
         """
+        return RGB24
+
+    def get_size(self) -> Size:
+        """
+        Returns the size of the frame.
+        """
+        return Size(0, 0)
+
+    def can_render(self, format: RawFormat) -> Future:
+        """
+        Checks if the frame can be rendered in the given format.
+        """
+        return resolve(self.format == format)
+
+    def render(self, plane: int, format: RawFormat) -> Future:
+        """
+        Renders the frame in the given format.
+        Note that the frame can always be rendered in the format given by the
+        format attribute.
+        """
+        return resolve(b'')
+
+    def get_metadata(self) -> Future:
+        """
+        Store meta-data about the frame.
+        """
+        return resolve({})
+
+
+class AlphaFrame(Frame):
+
+    def __init__(self, main, alpha):
+        self.main = main
+        self.alpha = alpha
 
     def format(self) -> RawFormat:
         """
         Returns the raw-format of the image.
         :return: The raw-format of the image.
         """
-        bands = self.to_pil().getbands()
-        if len(bands) == 1:
-            return GRAY8
-        if len(bands) == 4:
-            return RGBA32
-        return RGB24
+        main_format = list(self.main.format())
+        main_format[1] += 1
+        return RawFormat(*main_format)
 
-    def size(self) -> Size:
-        p = self.to_pil()
-        return Size(p.width, p.height)
-
-    def plane_size(self, plane) -> int:
+    def get_size(self) -> Size:
         """
-        Automatically calculated from size and format.,
-
-        :param plane:  The plane number.
-        :return:       The size of a plane.
+        Returns the size of the frame.
         """
-        w, h = self.size()
-        format = self.format()
+        return self.main.get_size()
 
-        if 0 < plane < 4:
-            w >>= format.subsampling_w
-            h >>= format.subsampling_h
-
-        return w*h*format.bytes_per_sample
-
-    def to_raw(self) -> bytes:
+    def can_render(self, format: RawFormat) -> Future:
         """
-        Generates an image that corresponds to the given frame data.
-        :return: A bytes-object with the frame data
+        Checks if the frame can be rendered in the given format.
         """
-        p = self.to_pil()
-        return b"".join(
-            bytes(im.getdata()) for im in p.split()
-        )
+        if not format.planar:
+            return False
 
-    @inline_resolved
-    def get_raw_data_async(self) -> Tuple[Size, RawFormat, bytes]:
-        return self.size(), self.format(), self.to_raw()
+        f = self.main.format()
+        if format.num_fields in (1,3):
+            return self.main.can_render(format)
+        else:
+            f = list(format)
+            f[1] -= 1
+            if not self.main.can_render(RawFormat(*f)):
+                return False
+
+            f[1] = 1
+            f[2] = ColorFamily.GREY
+            if not self.alpha.can_render(RawFormat(*f)):
+                return False
+
+            return True
+
+    def render(self, plane: int, format: RawFormat) -> Future:
+        """
+        Renders the frame in the given format.
+        Note that the frame can always be rendered in the format given by the
+        format attribute.
+        """
+        if not self.can_render(format):
+            raise ValueError("Unsupported format.")
+
+        if format.num_fields in (1, 3):
+            return self.main.render(plane, format)
+        elif (format.num_fields == 2 and plane==1) or (format.num_fields==4 and plane==3):
+            f = list(format)
+            f[1] = 1
+            f[2] = ColorFamily.GREY
+            return self.alpha.render(0, RawFormat(*f))
+        else:
+            f = list(format)
+            f[1] -= 1
+            return self.main.render(plane, RawFormat(*f))
+
+    @future_yield_coro
+    def get_metadata(self) -> Future:
+        """
+        Store meta-data about the frame.
+        """
+        m, a = self.main.get_metadata(), self.alpha.get_metadata()
+        yield gather([m, a])
+        a = a.result().copy()
+        a.update(m.result())
+        return a
 
 
 class Clip(object):
@@ -142,6 +239,12 @@ class Clip(object):
         :return: The amount of frames in the clip
         """
         raise NotImplementedError
+
+    def get_metadata(self) -> Future:
+        """
+        Retrieve meta-data about the clip.
+        """
+        return resolve({})
 
     def __getitem__(self, item: int) -> Future:
         """

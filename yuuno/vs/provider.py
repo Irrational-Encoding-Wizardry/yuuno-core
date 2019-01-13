@@ -28,8 +28,7 @@ from yuuno.utils import inline_resolved
 from yuuno.core.environment import Environment
 
 from yuuno.multi_scripts.script import Script
-from yuuno.multi_scripts.subprocess.provider import ScriptProvider
-from yuuno.multi_scripts.subprocess.process import LocalSubprocessEnvironment
+from yuuno.multi_scripts.provider import ScriptProvider
 
 
 @contextmanager
@@ -122,7 +121,7 @@ class VSStandaloneScript(Script):
 
 class VSScriptProvider(ScriptProvider):
 
-    def initialize(self, env: 'LocalSubprocessEnvironment') -> None:
+    def initialize(self, env: 'Environment') -> None:
         """
         Called after _all_ extensions have been loaded
         and the system is ready to be loaded.

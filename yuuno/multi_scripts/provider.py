@@ -20,7 +20,6 @@ from typing import List, NamedTuple, Optional, TYPE_CHECKING, Dict
 from yuuno import Yuuno
 if TYPE_CHECKING:
     from yuuno.multi_scripts.script import ScriptManager, Script
-    from yuuno.multi_scripts.subprocess.process import LocalSubprocessEnvironment
 
 
 class ScriptProviderRegistration(NamedTuple):
@@ -64,27 +63,3 @@ class ScriptProvider(object):
         Returns the script.
         """
         pass
-
-
-class ManagedScriptProvider(ScriptProvider):
-
-    manager_name: str
-    manager: Optional['ScriptManager']
-
-    script: Optional['Script']
-
-    def __init__(self, yuuno: Yuuno, *, manager_name: str, **kwargs: Dict[str, str]):
-        super(ManagedScriptProvider, self).__init__(yuuno, **kwargs)
-        self.manager_name = manager_name
-        self.manager = None
-        self.script = None
-
-    def initialize(self, env: 'LocalSubprocessEnvironment') -> None:
-        mscr = self.yuuno.get_extension('MultiScript')
-        self.manager = mscr.get_manager(self.manager_name)
-        if self.manager is None:
-            raise ValueError("Unknown Script Manager detected.")
-        self.script = self.manager.create('subprocess', initialize=True)
-
-    def get_script(self) -> 'Script':
-        return self.script

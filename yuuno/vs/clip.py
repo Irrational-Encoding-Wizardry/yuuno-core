@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 
 # Yuuno - IPython + VapourSynth
-# Copyright (C) 2017,2018 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
+# Copyright (C) 2017-2019 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
@@ -16,18 +16,19 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import ctypes
+from functools import wraps
 from typing import Tuple, overload
+from contextlib import contextmanager
 from concurrent.futures import Future
 
 from PIL import Image
-from traitlets import HasTraits, Instance, observe
 
 import vapoursynth as vs
 from vapoursynth import VideoNode, VideoFrame
 
 from yuuno import Yuuno
-from yuuno.utils import future_yield_coro, gather
-from yuuno.clip import Clip, Frame, Size, RawFormat
+from yuuno.utils import external_yield_coro, gather, resolve
+from yuuno.clip import Clip, Frame, Size, RawFormat, AlphaFrame
 from yuuno.vs.extension import VapourSynth
 from yuuno.vs.utils import get_proxy_or_core, is_single
 from yuuno.vs.flags import Features
@@ -120,225 +121,296 @@ else:
     extract_plane = extract_plane_r36compat
 
 
-class VapourSynthFrameWrapper(HasTraits, Frame):
+@contextmanager
+def _noop():
+    yield
 
-    pil_cache: Image.Image = Instance(Image.Image, allow_none=True)
+FORMAT_COMPATBGR32 = RawFormat(
+    sample_type=RawFormat.SampleType.INTEGER,
+    family=RawFormat.ColorFamily.RGB,
+    bits_per_sample=8,
+    subsampling_h=0,
+    subsampling_w=0,
+    num_fields=4,
+    packed=True,
+    planar=False
+)
+FORMAT_COMPATYUY2 = RawFormat(
+    sample_type=RawFormat.SampleType.INTEGER,
+    family=RawFormat.ColorFamily.YUV,
+    bits_per_sample=8,
+    subsampling_h=1,
+    subsampling_w=1,
+    num_fields=3,
+    packed=True,
+    planar=False
+)
 
-    frame: VideoFrame = Instance(VideoFrame)
-    rgb_frame: VideoFrame = Instance(VideoFrame)
-    compat_frame: VideoFrame = Instance(VideoFrame)
+
+class VapourSynthObject:
+
+    @staticmethod
+    def protect(func):
+        @wraps(func)
+        def _wrapper(self, *args, **kwargs):
+            mgr = getattr(self, 'get_environment', _noop)
+            with mgr():
+                return func(self, *args, **kwargs)
+        return _wrapper
+
+
+class VapourSynthFrame(Frame):
+
+    def __init__(self, single_frame_clip, fobj=None, allow_compat=True):
+        if fobj is None:
+            fobj = single_frame_clip
+            single_frame_clip = None
+
+        self.sfc = single_frame_clip
+        self.fobj = fobj
+        self._allow_compat = allow_compat
+        if self.fobj.format.color_family == vs.COMPAT:
+            raise ValueError("Passed a compat-frame even when forbidden.")
+
+        self._format_cache = {}
 
     @property
     def extension(self) -> VapourSynth:
         return Yuuno.instance().get_extension(VapourSynth)
 
-    def _extract(self):
-        if self.extension.merge_bands:
-            r = extract_plane(self.rgb_frame, 0, compat=False, direction=1)
-            g = extract_plane(self.rgb_frame, 1, compat=False, direction=1)
-            b = extract_plane(self.rgb_frame, 2, compat=False, direction=1)
-            self.pil_cache = Image.merge('RGB', (r, g, b))
+    def format(self):
+        ff: vs.Format = self.fobj.format
+
+        planar = ff.color_family == vs.COMPAT
+        if planar:
+            if int(ff) == vs.COMPAGBGR32:
+                return FORMAT_COMPATBGR32
+            else:
+                return FORMAT_COMPATYUY2
         else:
-            self.pil_cache = extract_plane(self.compat_frame, 0, compat=True)
+            fam = {
+                vs.RGB: RawFormat.ColorFamily.RGB,
+                vs.GRAY: RawFormat.ColorFamily.GREY,
+                vs.YUV: RawFormat.ColorFamily.YUV,
+                vs.YCOCG: RawFormat.ColorFamily.YUV
+            }[ff.color_family]
 
-    def to_pil(self) -> Image.Image:
-        if self.pil_cache is None:
-            self._extract()
-        # noinspection PyTypeChecker
-        return self.pil_cache
-
-    def size(self) -> Size:
-        return Size(self.frame.width, self.frame.height)
-
-    def format(self) -> RawFormat:
-        if self.extension.raw_force_compat:
-            frame = self.rgb_frame
-        else:
-            frame = self.frame
-
-        ff: vs.Format = frame.format
         samples = RawFormat.SampleType.INTEGER if ff.sample_type==vs.INTEGER else RawFormat.SampleType.FLOAT
-        fam = {
-            vs.RGB: RawFormat.ColorFamily.RGB,
-            vs.GRAY: RawFormat.ColorFamily.GREY,
-            vs.YUV: RawFormat.ColorFamily.YUV,
-            vs.YCOCG: RawFormat.ColorFamily.YUV
-        }[ff.color_family]
-
         return RawFormat(
             sample_type=samples,
             family=fam,
-            num_planes=ff.num_planes,
+            num_fields=ff.num_planes,
             subsampling_w=ff.subsampling_w,
             subsampling_h=ff.subsampling_h,
-            bits_per_sample=ff.bits_per_sample
+            bits_per_sample=ff.bits_per_sample,
+            packed=False,
+            planar=True
         )
 
-    def to_raw(self):
-        if self.extension.raw_force_compat:
-            frame = self.rgb_frame
+    def get_size(self) -> Size:
+        return Size(self.fobj.width, self.fobj.height)
+
+    def can_render(self, format: RawFormat) -> bool:
+        if format == self.format:
+            return True
+        elif not format.planar:
+            if format == FORMAT_COMPATBGR32:
+                return True
+            elif format == FORMAT_COMPATYUY2:
+                return True
+            else:
+                return False
+        elif format.num_fields in (2, 4):
+            return False
+        elif format.packed:
+            return False
         else:
-            frame = self.frame
+            return True
 
-        return b"".join(
-            extract_plane(frame, i, compat=False, raw=True)
-            for i in range(frame.format.num_planes)
-        )
+    @external_yield_coro
+    def render(self, plane: int, format: RawFormat):
+        if not self.can_render(format):
+            raise ValueError("Cannot convert to format.")
 
+        if not (0 <= plane < format.num_planes):
+            raise ValueError("Planeno outside range.")
 
-class VapourSynthClipMixin(HasTraits, Clip):
+        if format in self._format_cache:
+            return self._format_cache[format]
 
-    clip: VideoNode
+        mgr = getattr(self, 'get_environment', _noop)()
+        with mgr:
+            _converted = self._convert(format)
+            _frame_fut = _converted.get_frame_async(0)
+        frame = yield _frame_fut
 
-    @property
-    def extension(self) -> VapourSynth:
-        return Yuuno.instance().get_extension(VapourSynth)
-
-    @staticmethod
-    def _wrap_frame(frame: VideoFrame) -> VideoNode:
+        extracted = extract_plane(frame, plane, raw=True)
+        self._format_cache[format] = extracted
+        return extracted
+        
+    def _convert_sfc_compat(self, format: RawFormat, resizer):
+        if format == FORMAT_COMPATBGR32:
+            clip = self._convert_sfc_rgb(8, RawFormat.SampleType.INTEGER, resizer)
+            return resizer(clip, format=vs.COMPATBGR32)
+        else:
+            clip = self._convert_sfc_yuv(8, 1, 1, RawFormat.SampleType.INTEGER, resizer)
+            return resizer(clip, format=vs.COMPATYUY2)
+    
+    def _convert_sfc_rgb(self, bits, family, resizer):
         core = get_proxy_or_core()
-
-        bc = core.std.BlankClip(
-            width=frame.width,
-            height=frame.height,
-            length=1,
-            fpsnum=1,
-            fpsden=1,
-            format=frame.format.id
+        target = core.get_format(vs.RGB24).replace(
+            bits_per_sample=bits,
+            sample_type = (vs.INTEGER if family==RawFormat.SampleType.INTEGER else vs.FLOAT)
         )
+        params = {
+            'format': target
+        }
+        if self.fobj.format != target:
+            if self.fobj.format.color_family == vs.YUV:
+                params.update(
+                    matrix_in_s=self.extension.yuv_matrix,
+                    prefer_props=self.extension.prefer_props
+                )
+            return resizer(
+                self.sfc,
+                **params
+            )
+        else:
+            return self.sfc
 
-        return bc.std.ModifyFrame([bc], lambda n, f: frame.copy())
+    def _convert_sfc_yuv(self, bits, sw, sh, family, resizer):
+        core = get_proxy_or_core()
+        target = core.get_format(vs.YUV444P8).replace(
+            bits_per_sample=bits,
+            subsampling_w=sw,
+            subsampling_h=sh,
+            sample_type=(vs.INTEGER if family==RawFormat.SampleType.INTEGER else vs.FLOAT)
+        )
+        params = {'format': target}
+        if self.fobj.format != target:
+            if self.fobj.format.color_family != vs.YUV:
+                params.update(
+                    matrix_s=self.extension.yuv_matrix,
+                    prefer_props=self.extension.prefer_props
+                )
+            
+            return resizer(
+                self.sfc,
+                format=target,
+                matrix_in_s=self.extension.yuv_matrix,
+                matrix_s=self.extension.yuv_matrix,
+                prefer_props=self.extension.prefer_props
+            )
+        else:
+            return self.sfc
 
-    def _to_rgb32(self, clip: VideoNode) -> VideoNode:
-        if clip.format.color_family == vs.YUV:
-            clip = self.extension.resize_filter(
-                clip,
-                format=vs.RGB24,
+    def _convert_sfc_grey(self, bits, family, resizer):
+        core = get_proxy_or_core()
+        target = core.get_format(vs.GRAY8).replace(
+            bits_per_sample=bits,
+            sample_type = (vs.INTEGER if family==RawFormat.SampleType.INTEGER else vs.FLOAT)
+        )
+        if self.fobj.format != target:
+            return resizer(
+                self.sfc,
+                format=target,
                 matrix_in_s=self.extension.yuv_matrix,
                 prefer_props=self.extension.prefer_props
             )
+        else:
+            return self.sfc
 
-        if clip.format.color_family == vs.RGB or clip.format.bits_per_sample != 8:
-            clip = self.extension.resize_filter(clip, format=vs.RGB24)
+    def _make_sfc(self):
+        core = get_proxy_or_core()
+        bc = core.std.BlankClip(
+            length=1,
+            format=self.fobj.format,
+            fpsnum=1,
+            fpsden=1,
+            width=self.fobj.width,
+            height=self.fobj.height
+        )
+        return bc.std.ModifyFrame([bc], lambda n, f: self.fobj.copy())
 
-        processor = self.extension.processor
-        if processor is not None:
-            clip = processor(clip)
+    def get_metadata(self):
+        return resolve({
+            k: (v.decode("unicode-escape") if isinstance(v, bytes) else v)
+            for k, v in self.fobj.props.items()
+        })
 
-        return clip
+    def _convert(self, format):
+        if self.sfc is None:
+            self.sfc = self._make_sfc()
+        resizer = self.extension.resize_filter
+        if not format.planar:
+            return self._convert_sfc_compat(format, resizer)
+        elif format.family == RawFormat.ColorFamily.YUV:
+            return self._convert_sfc_yuv(
+                format.bits_per_sample,
+                format.subsampling_w,
+                format.subsampling_h,
+                format.sample_type,
+                resizer
+            )
+        elif format.family == RawFormat.ColorFamily.RGB:
+            return self._convert_sfc_rgb(
+                format.bits_per_sample,
+                format.sample_type,
+                resizer
+            )
+        else:
+            return self._convert_sfc_grey(
+                format.bits_per_sample,
+                format.sample_type,
+                resizer
+            )
 
-    def to_rgb32(self, frame: VideoNode) -> VideoNode:
-        return self._to_rgb32(frame)
+class VapourSynthClip(Clip):
 
-    def to_compat_rgb32(self, frame: VideoNode) -> VideoNode:
-        return self.extension.resize_filter(frame, format=vs.COMPATBGR32)
+    def __init__(self, clip):
+        self.clip = clip
+
+    def _get_environment(self):
+        mgr = getattr(self, 'get_environment', _noop)()
+        return mgr
+
+    def _check_alive(self):
+        with self._get_environment():
+            if not is_single():
+                try:
+                    get_proxy_or_core().std.BlankClip(self.clip)
+                except vs.Error:
+                    raise RuntimeError("Tried to access clip of a dead core.") from None
+
+    def make_frame(self, fcl, fobj, allow_compat=True):
+        return VapourSynthFrame(fcl, fobj, allow_compat)
 
     def __len__(self):
         return len(self.clip)
 
-    @future_yield_coro
-    def __getitem__(self, item) -> VapourSynthFrameWrapper:
-        if not is_single():
-            try:
-                get_proxy_or_core().std.BlankClip()
-            except vs.Error:
-                raise RuntimeError("Tried to access clip of a dead core.") from None
+    @external_yield_coro
+    def __getitem__(self, index):
+        self._check_alive()
 
-        frame = yield self.clip.get_frame_async(item)
-        wrapped = self._wrap_frame(frame)
-        _rgb24: Future = self.to_rgb32(wrapped)
-        rgb24 = _rgb24.get_frame_async(0)
-        compat: Future = self.to_compat_rgb32(_rgb24).get_frame_async(0)
-
-        (yield gather([rgb24, compat]))
-        rgb24_frame, compat_frame = rgb24.result(), compat.result()
-
-        return VapourSynthFrameWrapper(
-            frame=frame,
-            compat_frame=compat_frame,
-            rgb_frame=rgb24_frame
-        )
-
-
-class VapourSynthClip(VapourSynthClipMixin, HasTraits):
-
-    clip: VideoNode = Instance(VideoNode)
-
-    def __init__(self, clip):
-        super(VapourSynthClip, self).__init__(clip=clip)
-
-
-class VapourSynthFrame(VapourSynthClipMixin, HasTraits):
-
-    frame: VideoFrame = Instance(VideoFrame)
-    clip: VideoNode = Instance(VideoNode, allow_none=True)
-
-    def __init__(self, frame):
-        HasTraits.__init__(self, frame=frame)
-
-    @observe("frame")
-    def _frame_observe(self, value):
-        self.clip = self._wrap_frame(value['new'])
-
-
-class VapourSynthAlphaFrameWrapper(HasTraits):
-    clip: VapourSynthFrameWrapper = Instance(VapourSynthFrameWrapper)
-    alpha: VapourSynthFrameWrapper = Instance(VapourSynthFrameWrapper)
-
-    _cache: Image.Image = Instance(Image.Image, allow_none=True)
-
-    @property
-    def color(self):
-        return self.clip
-
-    def to_pil(self):
-        if self._cache is None:
-            color = self.clip.to_pil()
-            alpha = extract_plane(self.alpha.frame, 0, direction=1)
-            color.putalpha(alpha)
-            self._cache = color
-        return self._cache
-
-    def size(self) -> Size:
-        return self.clip.size()
-
-    def format(self) -> RawFormat:
-        f = self.clip.format()
-        return RawFormat(
-            bits_per_sample=f.bits_per_sample,
-            family=f.family,
-            num_planes=f.num_planes+1,
-            subsampling_h=f.subsampling_h,
-            subsampling_w=f.subsampling_w,
-            sample_type=f.sample_type
-        )
-
-    def to_raw(self):
-        return b"".join([self.clip.to_raw(), self.alpha.to_raw()])
-
-
-class VapourSynthAlphaClip(Clip):
-
-    def __init__(self, clip):
-        if not isinstance(clip, AlphaOutputClip):
-            raise ValueError("Passed non Alpha-Clip into the wrapper")
-
-        self.clip = VapourSynthClip(clip[0])
-        if clip[1] is None:
-            self.alpha = None
+        if not isinstance(self.clip, AlphaOutputClip):
+            with self._get_environment():
+                fcl = self.clip[index].std.Cache(size=1, fixed=True)
+                _fq = fcl.get_frame_async(0)
+            # Issue the frame request.
+            fobj = yield _fq
+            return self.make_frame(fcl, fobj)
         else:
-            self.alpha = VapourSynthClip(clip[1])
+            with self._get_environment():
+                main = self.clip[0][index].std.Cache(size=1, fixed=True)
+                alpha = self.clip[1][index].std.Cache(size=1, fixed=True)
 
-    def __len__(self):
-        if self.alpha is None:
-            return len(self.clip)
-        return min(map(len, (self.clip, self.alpha)))
+                f_ff = main.get_frame_async(0)
+                f_fa = alpha.get_frame_async(0)
 
-    @future_yield_coro
-    def __getitem__(self, item):
-        if self.alpha is None:
-            return (yield self.clip[item])
+            yield gather([f_ff, f_fa])
+            ff, fa = f_ff.result(), f_fa.result()
 
-        f1 = yield self.clip[item]
-        f2 = yield self.alpha[item]
-        return VapourSynthAlphaFrameWrapper(clip=f1, alpha=f2)
+            return AlphaFrame(
+                self.make_frame(main, ff, allow_compat=False),
+                self.make_frame(alpha, ff, allow_compat=False)
+            )

@@ -38,8 +38,6 @@ from yuuno.vs.utils import MessageLevel, is_single
 from yuuno.vs.flags import Features
 from yuuno.vs.alpha import AlphaOutputClip
 
-from yuuno.multi_scripts.subprocess.provider import ScriptProviderRegistration
-
 
 if TYPE_CHECKING:
     import vapoursynth as vs
@@ -177,21 +175,21 @@ Settings to a value less than one makes it default to the number of hardware thr
         self.parent.log.debug("Registering wrappers.")
         from vapoursynth import VideoNode, VideoFrame
         from yuuno.vs.clip import VapourSynthClip, VapourSynthFrame
-        from yuuno.vs.clip import VapourSynthAlphaClip
 
         # Detected VSScript.
         wrapperfunc = lambda cls: cls
         if self.script_manager is not None and self.vsscript_environment_wrap:
             wrapperfunc = self.script_manager.env_wrapper_for
 
+        # Register stuff.
         self.registry = Registry()
         self.registry.register(wrapperfunc(VapourSynthClip), VideoNode)
         self.registry.register(wrapperfunc(VapourSynthFrame), VideoFrame)
-        self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputClip)
+        self.registry.register(wrapperfunc(VapourSynthClip), AlphaOutputClip)
         if Features.SUPPORT_ALPHA_OUTPUT_TUPLE:
             # Required so that IPython automatically supports alpha outputs
             from vapoursynth import AlphaOutputTuple
-            self.registry.register(wrapperfunc(VapourSynthAlphaClip), AlphaOutputTuple)
+            self.registry.register(wrapperfunc(VapourSynthClip), AlphaOutputTuple)
 
         self.parent.registry.add_subregistry(self.registry)
 
@@ -202,6 +200,7 @@ Settings to a value less than one makes it default to the number of hardware thr
             self.parent.log.debug("MultiScript not found. Skipping VSScript.")
             return
 
+        from yuuno.multi_scripts.provider import ScriptProviderRegistration
         managers.register_provider('vapoursynth', ScriptProviderRegistration(
             providercls="yuuno.vs.provider.VSScriptProvider",
             extensions=[]

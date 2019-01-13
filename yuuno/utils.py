@@ -16,14 +16,16 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import functools
-from threading import Lock
+from queue import Queue
 from types import TracebackType
+from threading import Lock, Thread
 from typing import Optional, Type, NamedTuple, List, Any, TYPE_CHECKING
 from typing import Callable, TypeVar, Generator, Tuple, Generic, Sequence
 from concurrent.futures import Future as ConcFuture
 
 
 T = TypeVar("T")
+V = TypeVar("V")
 R = TypeVar("R")
 
 
@@ -54,6 +56,18 @@ if hasattr(Future, "register"):
     Future.register(ConcFuture)
 
 
+def resolve(val: T) -> Future[T]:
+    fut = ConcFuture()
+    fut.set_result(val)
+    return fut
+
+
+def reject(error: Exception) -> Future[T]:
+    fut = ConcFuture()
+    fut.set_exception(error)
+    return fut
+
+
 def inline_resolved(func: Callable[..., T]) -> Callable[..., Future[T]]:
     @functools.wraps(func)
     def _wrapped(*args, **kwargs) -> Future:
@@ -75,6 +89,27 @@ def auto_join(func: Callable[..., Future[T]]) -> Callable[..., T]:
         fut = func(*args, **kwargs)
         return fut.result()
     return _wrapped
+        
+
+
+def external_yield_coro(func: Callable[..., Generator[Future[T], T, R]]) -> Callable[..., Future[R]]:
+    fyc = future_yield_coro(func)
+
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        result = ConcFuture()
+        def _done(f):
+            try:
+                res = fut.result()
+                result.set_result(res)
+            except Exception as e:
+                result.set_exception(e)
+
+        fut = fyc(*args, **kwargs)
+        fut.add_done_callback(lambda f: Thread(target=lambda: _done(f)).start())
+        return result
+        
+    return _wrapper
 
 
 def future_yield_coro(func: Callable[..., Generator[Future[T], T, R]]) -> Callable[..., Future[R]]:

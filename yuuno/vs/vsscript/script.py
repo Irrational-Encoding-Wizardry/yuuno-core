@@ -30,6 +30,7 @@ from yuuno.vs.vsscript.vs_capi import ScriptEnvironment
 from yuuno.vs.vsscript.vs_capi import enable_vsscript, disable_vsscript
 from yuuno.vs.vsscript.clip import WrappedClip
 from yuuno.vs.utils import is_single
+from yuuno.vs.clip import VapourSynthClip, VapourSynthFrame
 
 
 class VSScript(Script):
@@ -76,7 +77,10 @@ class VSScript(Script):
         Returns a dictionary with clips
         that represent the results of the script.
         """
-        return {str(k): WrappedClip(self, self._yuuno.wrap(v)) for k, v in self.env.outputs.items()}
+        return {
+            str(k): WrappedClip.from_script(self, self._yuuno.wrap(v))
+            for k, v in self.env.outputs.items()
+        }
 
     @inline_resolved
     def perform(self, cb: Callable[[], Any]) -> Any:
@@ -134,7 +138,10 @@ class VSScriptManager(ScriptManager):
     def env_wrapper_for(self, cls):
         def _wrapper(*args, **kwargs):
             current_env = self._current_script()
-            return WrappedClip(current_env, cls(*args, **kwargs))
+            if issubclass(cls, VapourSynthClip):
+                return WrappedClip.from_script(current_env, *args, **kwargs)
+            else:
+                return WrappedFrame.from_script(current_env, *args, **kwargs)
         return _wrapper
 
     def create(self, name: str, *, initialize=False) -> Script:

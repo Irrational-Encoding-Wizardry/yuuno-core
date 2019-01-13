@@ -20,7 +20,7 @@ from typing import Dict, Optional, Iterator, TYPE_CHECKING
 from yuuno.core.extension import Extension
 if TYPE_CHECKING:
     from yuuno.multi_scripts.script import ScriptManager
-    from yuuno.multi_scripts.subprocess.provider import ScriptProviderRegistration
+    from yuuno.multi_scripts.provider import ScriptProviderRegistration
 
 
 class MultiScriptExtension(Extension):

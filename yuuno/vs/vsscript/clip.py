@@ -18,61 +18,39 @@
 from typing import TYPE_CHECKING, Callable, Any, TypeVar, Generic
 
 from yuuno.utils import future_yield_coro, auto_join
-from yuuno.clip import Clip, Frame
+from yuuno.vs.clip import VapourSynthClip, VapourSynthFrame
 
 if TYPE_CHECKING:
     from yuuno.vs.vsscript.script import VSScript
 
 
-T = TypeVar("T", Clip, Frame)
+class Wrapper:
+    @classmethod
+    def from_script(cls, script, *args, **kwargs):
+        import vapoursynth as vs
+        env = script.perform(lambda: vs.vpy_current_environment()).result()
+        return cls(env, *args, **kwargs)
 
 
-class WrappedMixin(Generic[T]):
-    env: 'VSScript'
-    parent: T
+class WrappedFrame(VapourSynthFrame, Wrapper):
 
-    def __init__(self, env: 'VSScript', parent: T):
+    def __init__(self, env, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.env = env
-        self.parent = parent
 
-    @staticmethod
-    def wrap(name: str) -> Callable[..., Any]:
-        @auto_join
-        @future_yield_coro
-        def _func(self: 'WrappedMixin', *args, **kwargs):
-            func = getattr(self.parent, name)
-            result = yield self.env.perform(lambda: func(*args, **kwargs))
-            result = yield result
-            if isinstance(result, Frame):
-                result = WrappedFrame(self.env, result)
-            return result
-        return _func
-
-    @staticmethod
-    def wrap_future(name: str):
-        @future_yield_coro
-        def _func(self: 'WrappedMixin', *args, **kwargs):
-            func = getattr(self.parent, name)
-            result = yield self.env.perform(lambda: func(*args, **kwargs))
-            result = yield result
-            if isinstance(result, Frame):
-                result = WrappedFrame(self.env, result)
-            return result
-        return _func
+    def get_environment(self):
+        return self.env
 
 
-class WrappedFrame(WrappedMixin[Frame], Frame):
-    to_pil = WrappedMixin.wrap('to_pil')
-    to_raw = WrappedMixin.wrap('to_raw')
-    size = WrappedMixin.wrap('size')
-    format = WrappedMixin.wrap('format')
-    get_raw_data_async = WrappedMixin.wrap_future('get_raw_data_async')
+class WrappedClip(VapourSynthClip, Wrapper):
 
 
-class WrappedClip(WrappedMixin[Clip], Clip):
-    __len__ = WrappedMixin.wrap('__len__')
-    __getitem__ = WrappedMixin.wrap_future('__getitem__')
+    def __init__(self, env, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.env = env
 
-    @property
-    def clip(self):
-        return self.parent.clip
+    def get_environment(self):
+        return self.env
+
+    def make_frame(self, fcl, fobj, allow_compat=True):
+        return WrappedFrame(self.env, fcl, fobj, allow_compat)

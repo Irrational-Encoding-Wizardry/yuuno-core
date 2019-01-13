@@ -20,10 +20,24 @@ from io import BytesIO
 
 from traitlets import Unicode, CInt, Any
 from traitlets.config import Configurable
-from PIL.Image import Image
+from PIL.Image import Image, frombytes, merge
 
-from yuuno.clip import Frame
+from yuuno.clip import Frame, RawFormat, RGB24, RGBA32
+from yuuno.utils import future_yield_coro, gather
 from yuuno.output.srgb_png import srgb
+
+
+def _patch2unpacked(format: RawFormat) -> RawFormat:
+    f = list(format)
+    f[6] = False
+    return RawFormat(*f)
+
+SUPPORTED_FORMATS = [
+    (RGBA32, "RGBA"),
+    (RGB24, "RGB"),
+    (_patch2unpacked(RGBA32), "RGBA"),
+    (_patch2unpacked(RGB24), "RGB")
+]
 
 
 class YuunoImageOutput(Configurable):
@@ -38,6 +52,31 @@ class YuunoImageOutput(Configurable):
     zlib_compression: int = CInt(6, help="0=No compression\n1=Fastest\n9=Slowest", config=True)
     icc_profile: str = Unicode("sRGB", help="Specify the path to an ICC-Profile (Defaults to sRGB).", allow_none=True, config=True)
 
+    @future_yield_coro
+    def to_pil(self, im: Frame) -> Image:
+        import threading
+        planes = []
+    
+        for raw_format, pil_format in SUPPORTED_FORMATS:
+            if im.can_render(raw_format):
+                break
+        else:
+            raise ValueError("Cannot convert frame to RGB")
+
+        for p in range(raw_format.num_planes):
+            planes.append(im.render(p, raw_format))
+
+        yield gather(planes)
+        planes = [plane.result() for plane in planes]
+        
+        sz = im.get_size()
+        planes = [
+            frombytes('L', sz, p, 'raw', 'L', raw_format.get_stride(n, sz), 1)
+            for n, p in enumerate(planes)
+        ]
+        return merge(pil_format, planes)
+
+
     def bytes_of(self, im: Frame) -> bytes:
         """
         Converts the frame into a bytes-object containing
@@ -46,8 +85,9 @@ class YuunoImageOutput(Configurable):
         :param im: the frame to convert.
         :return: A bytes-object containing the image.
         """
+        import threading
         if not isinstance(im, Image):
-            im = im.to_pil()
+            im = self.to_pil(im).result()
         if im.mode not in ("RGBA", "RGB", "1", "L", "P"):
             im = im.convert("RGB")
 
