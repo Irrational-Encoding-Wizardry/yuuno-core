@@ -139,7 +139,7 @@ FORMAT_COMPATYUY2 = RawFormat(
     sample_type=RawFormat.SampleType.INTEGER,
     family=RawFormat.ColorFamily.YUV,
     bits_per_sample=8,
-    subsampling_h=1,
+    subsampling_h=0,
     subsampling_w=1,
     num_fields=3,
     packed=True,
@@ -169,7 +169,7 @@ class VapourSynthFrame(Frame):
         self.sfc = single_frame_clip
         self.fobj = fobj
         self._allow_compat = allow_compat
-        if self.fobj.format.color_family == vs.COMPAT:
+        if not self._allow_compat and self.fobj.format.color_family == vs.COMPAT:
             raise ValueError("Passed a compat-frame even when forbidden.")
 
         self._format_cache = {}
@@ -183,7 +183,7 @@ class VapourSynthFrame(Frame):
 
         planar = ff.color_family == vs.COMPAT
         if planar:
-            if int(ff) == vs.COMPAGBGR32:
+            if int(ff) == vs.COMPATBGR32:
                 return FORMAT_COMPATBGR32
             else:
                 return FORMAT_COMPATYUY2
@@ -378,12 +378,18 @@ class VapourSynthClip(Clip):
         with self._get_environment():
             if not is_single():
                 try:
-                    get_proxy_or_core().std.BlankClip(self.clip)
+                    get_proxy_or_core().std.BlankClip()
                 except vs.Error:
                     raise RuntimeError("Tried to access clip of a dead core.") from None
 
     def make_frame(self, fcl, fobj, allow_compat=True):
         return VapourSynthFrame(fcl, fobj, allow_compat)
+
+    def get_metadata():
+        cl = self.clip[0] if isinstance(self.clip, AlphaOutputClip) else self.clip
+        return resolve({
+            'fps': "%.03f"%(cl.fps) if cl.fps is not None else "(variable)"
+        })
 
     def __len__(self):
         return len(self.clip)
