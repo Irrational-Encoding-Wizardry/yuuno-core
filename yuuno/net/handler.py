@@ -29,7 +29,6 @@ class RequestReplyConnection(ChildConnection):
         
         try:
             func = getattr(self, f'on_{type}', lambda d, b: _raise(ValueError("Unknown function.")))
-            print(func, payload, type)
             res = func(payload, binaries)
             if isinstance(res, Future):
                 res, binaries = yield res
@@ -85,7 +84,6 @@ class ClipHandler(RequestReplyConnection):
 
     @future_yield_coro
     def on_frame(self, data, binaries) -> None:
-        print("RENDER", self.clip, data, binaries)
         frame = data.get('frame', 0)
         if frame > len(self.clip):
             frame = len(self.clip)-1
