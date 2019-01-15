@@ -385,13 +385,15 @@ class VapourSynthClip(Clip):
     def make_frame(self, fcl, fobj, allow_compat=True):
         return VapourSynthFrame(fcl, fobj, allow_compat)
 
-    def get_metadata():
-        cl = self.clip[0] if isinstance(self.clip, AlphaOutputClip) else self.clip
+    def get_metadata(self):
         return resolve({
-            'fps': "%.03f"%(cl.fps) if cl.fps is not None else "(variable)"
+            "Has Alpha": isinstance(self.clip, AlphaOutputClip)
         })
 
     def __len__(self):
+        if isinstance(self.clip, AlphaOutputClip):
+            return min(map(len, self.clip))
+
         return len(self.clip)
 
     @external_yield_coro
