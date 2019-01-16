@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 
 # Yuuno - IPython + VapourSynth
-# Copyright (C) 2018 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
+# Copyright (C) 2018,2019 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
@@ -18,10 +18,21 @@
 import pkg_resources
 
 
+def _make_proxy(entrypoint):
+    _obj = None
+    def _entrypoint_wrapper(*args, **kwargs):
+        nonlocal _obj
+        if _obj is None:
+            _obj = entrypoint.load()
+        
+        return _obj(*args, **kwargs)
+    return _entrypoint_wrapper
+
+
 def discover_environments(module_dict):
     all_exts = []
     for ep in pkg_resources.iter_entry_points('yuuno.environments'):
-        module_dict[ep.name] = ep.load()
+        module_dict[ep.name] = _make_proxy(ep)
         all_exts.append(ep.name)
     return all_exts
 

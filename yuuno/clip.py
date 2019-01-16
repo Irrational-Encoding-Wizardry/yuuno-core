@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 
 # Yuuno - IPython + VapourSynth
-# Copyright (C) 2017,2018 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
+# Copyright (C) 2017-2019 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
@@ -50,6 +50,18 @@ class RawFormat(NamedTuple):
     subsampling_w: int = 0
     packed: bool = True
     planar: bool = True
+
+    @classmethod
+    def from_json(self, data):
+        if data[-1] == "v1":
+            data = list(data)
+            data[2] = ColorFamily(data[2])
+            data[3] = SampleType(data[3])
+            return RawFormat(*data[:-1])
+        raise ValueError("Unsupported format")
+
+    def to_json(self):
+        return (*self, "v1")
 
     @property
     def bytes_per_sample(self) -> int:
@@ -217,6 +229,10 @@ class AlphaFrame(Frame):
         a.update(m.result())
         return a
 
+    def dispose(self) -> None:
+        self.main.dispose()
+        self.alpha.dispose()
+
 
 class Clip(object):
     """
@@ -254,3 +270,14 @@ class Clip(object):
         :return: A frame-instance with the given data.
         """
         raise NotImplementedError
+
+    def dispose(self) -> None:
+        """
+        Disposes the clip after it has been used. This function may be called
+        after it has been disposed.
+
+        Leave this empty if unused.
+        """
+
+    def __del__(self):
+        self.dispose()

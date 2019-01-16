@@ -1,3 +1,20 @@
+# -*- encoding: utf-8 -*-
+
+# Yuuno - IPython + VapourSynth
+# Copyright (C) 2019 StuxCrystal (Roland Netzsch <stuxcrystal@encode.moe>)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from yuuno.net.base import Connection, ChildConnection
 from yuuno.utils import future_yield_coro
 from yuuno.clip import Clip, Frame
@@ -61,7 +78,9 @@ class RequestReplyMethod:
         self.name = name
 
     def __get__(self, instance, owner):
-        def _func(data, binaries):
+        def _func(data=(), binaries=None):
+            if binaries is None:
+                binaries = {}
             return owner._request(instance, self.name, data, binaries)
         return _func
 
@@ -113,6 +132,13 @@ class ClipHandler(RequestReplyServerConnection):
         super().__init__(parent)
         self.clip = clip
         self.yuuno = yuuno
+        self._cache = [None, None]
+
+    def frame_at(self, frame):
+        if self._cache[0] == frame:
+            return self._cache[1]
+        self._cache = frame, self.clip[frame]
+        return self._cache
 
     def on_length(self, data, binaries) -> None:
         return {'length': len(self.clip)}, []
@@ -126,7 +152,7 @@ class ClipHandler(RequestReplyServerConnection):
         if frame > len(self.clip):
             frame = len(self.clip)-1
 
-        frame = yield self.clip[frame]
+        frame = yield self.frame_at(frame)
         return (yield frame.get_metadata()), []
 
     @future_yield_coro
@@ -135,8 +161,17 @@ class ClipHandler(RequestReplyServerConnection):
         if frame > len(self.clip):
             frame = len(self.clip)-1
 
-        frame = yield self.clip[frame]
-        return frame.format(), []
+        frame = yield self.frame_at(frame)
+        return frame.format().to_json(), []
+        
+    @future_yield_coro
+    def on_size(self, data, binaries) -> None:
+        frame = data.get('frame', 0)
+        if frame > len(self.clip):
+            frame = len(self.clip)-1
+
+        frame = yield self.frame_at(frame)
+        return frame.get_size(), []
 
     @future_yield_coro
     def on_render(self, data, binaries) -> None:
@@ -144,11 +179,21 @@ class ClipHandler(RequestReplyServerConnection):
         if frame > len(self.clip):
             frame = len(self.clip)-1
 
-        frame = yield self.clip[frame]
-        format = list(data.get('format', frame.format()))
+        frame = yield self.frame_at(frame)
+        format = data.get('format')
+        if format is None:
+            format = frame.format()
+        else:
+            format = RawFormat.from_json(format)
         
-        
-        
+        if not (yield frame.can_render(format)):
+            return {'size': None}, []
+    
+        plane = data.get('plane', None)
+        if plane is None:
+            return {size: frame.get_size()}, []
+
+        return {'size': frame.get_size()}, [(yield frame.render(plane, format))]
 
     @future_yield_coro
     def on_frame(self, data, binaries) -> None:
@@ -156,5 +201,5 @@ class ClipHandler(RequestReplyServerConnection):
         if frame > len(self.clip):
             frame = len(self.clip)-1
 
-        frame = yield self.clip[frame]
+        frame = yield self.frame_at(frame)
         return {'size': frame.get_size()}, [self.yuuno.output.bytes_of(frame)]
