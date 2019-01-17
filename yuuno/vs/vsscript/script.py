@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from pathlib import Path
+from contextlib import contextmanager
 from typing import Dict, Union, Callable, Any, Optional
 
 import vapoursynth
@@ -77,10 +78,17 @@ class VSScript(Script):
         Returns a dictionary with clips
         that represent the results of the script.
         """
-        return {
-            str(k): WrappedClip.from_script(self, self._yuuno.wrap(v))
-            for k, v in self.env.outputs.items()
-        }
+        with self._inside_environment():
+            return {
+                str(k): self._yuuno.wrap(v)
+                for k, v in self.env.outputs.items()
+            }
+
+    @contextmanager
+    def _inside_environment(self):
+        env = self.perform(lambda: vapoursynth.vpy_current_environment()).result()
+        with env:
+            yield
 
     @inline_resolved
     def perform(self, cb: Callable[[], Any]) -> Any:

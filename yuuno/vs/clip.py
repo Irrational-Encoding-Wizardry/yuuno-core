@@ -27,7 +27,7 @@ import vapoursynth as vs
 from vapoursynth import VideoNode, VideoFrame
 
 from yuuno import Yuuno
-from yuuno.utils import external_yield_coro, gather, resolve
+from yuuno.utils import external_yield_coro, gather, resolve, inline_resolved
 from yuuno.clip import Clip, Frame, Size, RawFormat, AlphaFrame
 from yuuno.vs.extension import VapourSynth
 from yuuno.vs.utils import get_proxy_or_core, is_single
@@ -210,6 +210,7 @@ class VapourSynthFrame(Frame):
     def get_size(self) -> Size:
         return Size(self.fobj.width, self.fobj.height)
 
+    @inline_resolved
     def can_render(self, format: RawFormat) -> bool:
         if format == self.format:
             return True
@@ -235,8 +236,9 @@ class VapourSynthFrame(Frame):
         if not (0 <= plane < format.num_planes):
             raise ValueError("Planeno outside range.")
 
-        if format in self._format_cache:
-            return self._format_cache[format]
+        cache_key = (format, plane)
+        if cache_key in self._format_cache:
+            return self._format_cache[cache_key]
 
         mgr = getattr(self, 'get_environment', _noop)()
         with mgr:
@@ -245,7 +247,7 @@ class VapourSynthFrame(Frame):
         frame = yield _frame_fut
 
         extracted = extract_plane(frame, plane, raw=True)
-        self._format_cache[format] = extracted
+        self._format_cache[cache_key] = extracted
         return extracted
         
     def _convert_sfc_compat(self, format: RawFormat, resizer):

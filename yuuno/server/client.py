@@ -36,13 +36,13 @@ class ScriptController(RequestReplyServerConnection):
     def on_results(self, data, binaries):
         results = {
             name: len(script)
-            for name, script in (yield self.script.results()).items()
+            for name, script in (yield self.script.get_results()).items()
         }
         return results, []
 
     @future_yield_coro
     def on_execute(self, data, binaries):
-        yield self.script.execute(data['script']), []
+        return (yield self.script.execute(data['script'])), []
 
     @future_yield_coro
     def on_open_clip(self, data, binaries):
@@ -50,15 +50,15 @@ class ScriptController(RequestReplyServerConnection):
         if name in self.opened_clips:
             raise ValueError("Name already taken")
 
-        clips = yield self.script.results()
+        clips = yield self.script.get_results()
 
         target = data['target']
         if target not in clips:
             raise ValueError("Unknown clip.")
 
-        clip = clips[name]
+        clip = clips[target]
         
-        handler = ClipHandler(self.multiplexer.register(name), clip)
+        handler = ClipHandler(self.multiplexer.register(name), clip, self.client.yuuno)
         self.opened_clips[name] = (clip, handler)
         return {}, []
 
@@ -69,7 +69,7 @@ class ScriptController(RequestReplyServerConnection):
 
 class Controller(RequestReplyServerConnection):
 
-    def __init__(self, parent, multiplexer,client):
+    def __init__(self, parent, multiplexer, client):
         super().__init__(parent)
         self.multiplexer = multiplexer
         self.client = client
@@ -83,27 +83,29 @@ class Controller(RequestReplyServerConnection):
         if name is None:
             return {'name': None}, []
 
-        script = self.mgr.create(self.client.name + "::" + name, initialize=True)
+        script = self.client.mgr.create(self.client.name + "::" + name, initialize=True)
         self.scripts[name] = script
         conn = ConnectionMultiplexer(self.multiplexer.register(name))
         ScriptController(conn.register(None), conn, self.client, script)
         return {'name': name}, []
 
     def on_destroy_script(self, data, binaries):
+        name = data["name"]
         self.scripts.pop(name).dispose()
-        self.multiplexer.unregister(data["name"])
+        self.multiplexer.unregister(name)
 
         return {}, []
 
 
 class Client(object):
 
-    def __init__(self, connection, base, addr, log, mgr):
+    def __init__(self, connection, addr, log, mgr, yuuno):
         self.name = f"script::{addr[0]}::{addr[1]}"
         self.mgr = mgr
         self.log = log
-        self.base_connection = base
-        self.connection = connection
+        self.connection = ConnectionMultiplexer(connection)
+        self.control = Controller(self.connection.register(None), self.connection, self)
+        self.yuuno = yuuno
 
         self.scripts = {}
 

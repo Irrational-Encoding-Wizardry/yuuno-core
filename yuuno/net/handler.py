@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from yuuno.net.base import Connection, ChildConnection
 from yuuno.utils import future_yield_coro
-from yuuno.clip import Clip, Frame
+from yuuno.clip import Clip, Frame, RawFormat
 from yuuno.yuuno import Yuuno
 
 
@@ -45,24 +45,31 @@ class RequestReplyServerConnection(ChildConnection):
 
         payload = data.get('payload', {})
         
+        func = getattr(self, f'on_{type}', lambda d, b: _raise(ValueError("Unknown function.")))
         try:
-            func = getattr(self, f'on_{type}', lambda d, b: _raise(ValueError("Unknown function.")))
             res = func(payload, binaries)
             if isinstance(res, Future):
                 res, binaries = yield res
             else:
                 res, binaries = res
 
-        except Exception as e:
-            tb = traceback.print_exception(type(e), e, e.__traceback__)
-            tb = ''.join(tb)
+        except BaseException as e:
+            print(e, e.__class__, e.__traceback__)
+            try:
+                tb = traceback.format_exception(e.__class__, e, e.__traceback__)
+                tb = ''.join(tb)
+            except BaseException as inner:
+                tb = '\n'.join([
+                    f'Error: {str(e)}',
+                    f'Failed to properly render: {str(inner)}'
+                ])
             self.send({
                 'id': rqid,
                 'type': 'failure',
                 'payload': {
                     'message': tb
                 }
-            })
+            }, [])
 
         else:
             self.send({
@@ -78,9 +85,9 @@ class RequestReplyMethod:
         self.name = name
 
     def __get__(self, instance, owner):
-        def _func(data=(), binaries=None):
-            if binaries is None:
-                binaries = {}
+        def _func(data=None, binaries=()):
+            if data is None:
+                data = {}
             return owner._request(instance, self.name, data, binaries)
         return _func
 
@@ -138,7 +145,7 @@ class ClipHandler(RequestReplyServerConnection):
         if self._cache[0] == frame:
             return self._cache[1]
         self._cache = frame, self.clip[frame]
-        return self._cache
+        return self._cache[1]
 
     def on_length(self, data, binaries) -> None:
         return {'length': len(self.clip)}, []
@@ -191,7 +198,7 @@ class ClipHandler(RequestReplyServerConnection):
     
         plane = data.get('plane', None)
         if plane is None:
-            return {size: frame.get_size()}, []
+            return {'size': frame.get_size()}, []
 
         return {'size': frame.get_size()}, [(yield frame.render(plane, format))]
 

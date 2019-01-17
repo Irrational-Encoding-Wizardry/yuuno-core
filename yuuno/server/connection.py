@@ -41,9 +41,10 @@ class SocketConnection(BinaryConnection):
             while length > 0 and data:
                 buffers.append(data)
                 length -= len(data)
+                if length == 0:
+                    break
                 data = self.sock.recv(length)
 
-            print(length, data)
             if not data:
                 raise IOError("Socket closed unexpectedly")
 
@@ -51,7 +52,7 @@ class SocketConnection(BinaryConnection):
 
         self.alive = True
         while self.alive:
-            framesz = struct.unpack(">I", _readall(2))
+            framesz = struct.unpack(">I", _readall(4))[0]
             self.parse(_readall(framesz))
 
     def stop(self):

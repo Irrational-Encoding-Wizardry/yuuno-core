@@ -47,6 +47,7 @@ class ConnectionFrame(Frame):
         data = (yield self.connclip._render({'frame': self._no, 'format': format.to_json(), 'plane': None}))[0]
         return data['size'] is not None
 
+    @future_yield_coro
     def render(self, plane: int, format: RawFormat) -> Future:
         """
         Renders the frame in the given format.
@@ -58,6 +59,7 @@ class ConnectionFrame(Frame):
             raise ValueError("Unsupported format")
         return buf[0]
 
+    @future_yield_coro
     def get_metadata(self) -> Future:
         """
         Store meta-data about the frame.
@@ -109,10 +111,10 @@ class ConnectionClip(RequestReplyClientConnection, Clip):
         :param item: The frame number
         :return: A frame-instance with the given data.
         """
-        _f = self._format()
+        _f = self._format({'frame': item})
         _s = self._render({'plane': None, 'frame': item})
         yield gather([_f, _s])
 
-        format = RawFormat.from_json(_f.result())
+        format = RawFormat.from_json(_f.result()[0])
         size = Size(*_s.result()[0]["size"])
-        raise ConnectionFrame(self, item, format, size)
+        return ConnectionFrame(self, item, format, size)

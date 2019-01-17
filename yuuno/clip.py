@@ -197,26 +197,27 @@ class AlphaFrame(Frame):
 
             return True
 
+    @future_yield_coro
     def render(self, plane: int, format: RawFormat) -> Future:
         """
         Renders the frame in the given format.
         Note that the frame can always be rendered in the format given by the
         format attribute.
         """
-        if not self.can_render(format):
+        if not (yield self.can_render(format)):
             raise ValueError("Unsupported format.")
 
         if format.num_fields in (1, 3):
-            return self.main.render(plane, format)
+            return (yield self.main.render(plane, format))
         elif (format.num_fields == 2 and plane==1) or (format.num_fields==4 and plane==3):
             f = list(format)
             f[1] = 1
             f[2] = ColorFamily.GREY
-            return self.alpha.render(0, RawFormat(*f))
+            return (yield self.alpha.render(0, RawFormat(*f)))
         else:
             f = list(format)
             f[1] -= 1
-            return self.main.render(plane, RawFormat(*f))
+            return (yield self.main.render(plane, RawFormat(*f)))
 
     @future_yield_coro
     def get_metadata(self) -> Future:

@@ -58,7 +58,7 @@ class YuunoImageOutput(Configurable):
         planes = []
     
         for raw_format, pil_format in SUPPORTED_FORMATS:
-            if im.can_render(raw_format):
+            if (yield im.can_render(raw_format)):
                 break
         else:
             raise ValueError("Cannot convert frame to RGB")

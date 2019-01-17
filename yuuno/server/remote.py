@@ -37,7 +37,7 @@ class RemoteClip(Clip):
 
         :return: The amount of frames in the clip
         """
-        return len(self._length)
+        return self._length
 
     @future_yield_coro
     def get_metadata(self) -> Future:
@@ -77,7 +77,7 @@ class RemoteClip(Clip):
                 self._dispose(self._inst.result())
 
             # Call the underlying dispose function.
-            self._inst.dispose()
+            self._inst.result().dispose()
 
         self._disposed = True
 
@@ -129,16 +129,18 @@ class RemoteScript(RequestReplyClientConnection, Script):
         that represent the results of the script.
         """
         def _make_clip(name, length):
-            name = f"{id(self)}/{id(_make_clip)}/{name}"
+            conn_target = f"{id(self)}/{id(_make_clip)}/{name}"
 
             @future_yield_coro
             def _connect():
-                conn = ClipConnection(self._script_multiplexer.register(name), length)
-                yield self._open_clip({'name': name, 'target': name})
+                conn = ConnectionClip(self._script_multiplexer.register(conn_target), length)
+                yield self._open_clip({'name': conn_target, 'target': name})
                 return conn
 
+            @future_yield_coro
             def _disconnect(clip):
-                self._close_clip({'name': name})
+                yield self._close_clip({'name': conn_target})
+                self._script_multiplexer.unregister(conn_target)
 
             return RemoteClip(length, _connect, _disconnect)
 
@@ -148,6 +150,7 @@ class RemoteScript(RequestReplyClientConnection, Script):
             for name, length in result.items()
         }
 
+    @future_yield_coro
     def execute(self, code: str) -> Future:
         """
         Executes the code inside the environment
@@ -183,6 +186,7 @@ class RemoteScriptManager(RequestReplyClientConnection, ScriptManager):
         Creates a new script environment.
         """
         self._create_script({'name': name})
+        self._scripts[name] = RemoteScript(self.connection.register(name), name, self)
         return self.get(name)
 
     def get(self, name: str) -> Optional[Script]:

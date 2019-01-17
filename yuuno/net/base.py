@@ -15,6 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import zlib
 import json
 import struct
 from typing import List, Callable
@@ -93,30 +94,33 @@ class BinaryConnection(Connection):
         data = memoryview(data)
         index = 0
 
-        sz = struct.calcsize("HI")
+        sz = struct.calcsize(">HI")
         length, first_blob_length = struct.unpack('>HI', data[index:index+sz])
         index += sz
 
-        binary_blobs = struct.unpack(f'>{length}I', data[index:index+sz])
-        index += sz
+        if length > 1:
+            sz = struct.calcsize(f">{length-1}I")
+            binary_blobs = struct.unpack(f'>{length-1}I', data[index:index+sz])
+            index += sz
+        else:
+            binary_blobs = []
         
-        text_blob = json.loads(data[index:index+first_blob_length].decode('utf-8'))
+        text_blob = json.loads(bytes(data[index:index+first_blob_length]).decode('utf-8'))
         index += first_blob_length
 
-        data = []
+        blobs = []
         for blob_size in binary_blobs:
-            data.append(bytes(data[index:index+blob_size]))
+            blobs.append(bytes(data[index:index+blob_size]))
             index += blob_size
 
-        print("<", repr(text_blob))
-        self.receive(text_blob, [])
-
+        print("<", repr(text_blob), len(blobs), [b[:10] for b in blobs])
+        self.receive(text_blob, blobs)
 
     def write(self, data: bytes) -> None:
         pass
 
     def send(self, data: dict, binaries: List[bytes]) -> None:
-        print(">", repr(data))
+        print(">", repr(data), len(binaries))
         data_blob = json.dumps(data).encode('utf-8')
         raw = struct.pack(
             f">HI{len(binaries)}I",
@@ -124,4 +128,7 @@ class BinaryConnection(Connection):
             len(data_blob),
             *map(len, binaries)
         )
-        self.write(raw)
+
+        info = b''.join([raw, data_blob, *binaries])
+        self.write(info)
+        

@@ -77,9 +77,8 @@ class YuunoServerApplication(Application):
 
     def init_client(self, sock, addr):
         self.log.info("New connection from %s:%d"%addr)
-        conn = ConnectionMultiplexer(SocketConnection(sock))
-        control = conn.register(None)
-        Client(control, conn, addr, self.log, self._manager)
+        conn = SocketConnection(sock)
+        Client(conn, addr, self.log, self._manager, self.yuuno)
 
     def start(self):
         self.log.info("Yuuno Encode Server")
