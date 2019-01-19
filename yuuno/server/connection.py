@@ -17,8 +17,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from yuuno.net.base import BinaryConnection
 
+from socket import socket, SHUT_RDWR
 from threading import Thread, Lock
-from socket import socket
 import struct
 
 
@@ -46,6 +46,7 @@ class SocketConnection(BinaryConnection):
                 data = self.sock.recv(length)
 
             if not data:
+                self.stop()
                 raise IOError("Socket closed unexpectedly")
 
             return b''.join(buffers)
@@ -57,8 +58,8 @@ class SocketConnection(BinaryConnection):
 
     def stop(self):
         self.alive = False
-        self.sock.shutdown()
-
+        self.sock.shutdown(SHUT_RDWR)
+        self.closed()
 
     def write(self, data: bytes):
         with self.wlock:

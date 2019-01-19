@@ -46,7 +46,7 @@ class ChildConnection(Connection):
         super().__init__()
         self.parent = parent
         self.parent.receive = self._receive
-        self.parent.shutdown = self._shutdown
+        self.parent.closed = self._closed
 
         self._receive_func = None
         self._closed_func = None
@@ -54,8 +54,11 @@ class ChildConnection(Connection):
     def _receive(self, d, b):
         self.receive(d, b)
 
-    def _shutdown(self):
-        self.shutdown()
+    def _closed(self):
+        self.closed()
+
+    def shutdown(self):
+        self.parent.shutdown()
 
     @property
     def receive(self):
@@ -113,14 +116,14 @@ class BinaryConnection(Connection):
             blobs.append(bytes(data[index:index+blob_size]))
             index += blob_size
 
-        print("<", repr(text_blob), len(blobs), [b[:10] for b in blobs])
+        print("R", text_blob, [b[:10] for b in blobs])
         self.receive(text_blob, blobs)
 
     def write(self, data: bytes) -> None:
         pass
 
     def send(self, data: dict, binaries: List[bytes]) -> None:
-        print(">", repr(data), len(binaries))
+        print("S", data, [b[:10] for b in binaries])
         data_blob = json.dumps(data).encode('utf-8')
         raw = struct.pack(
             f">HI{len(binaries)}I",
