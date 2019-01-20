@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from yuuno.net.base import Connection, ChildConnection
-from yuuno.utils import future_yield_coro
+from yuuno.utils import future_yield_coro, gather
 from yuuno.clip import Clip, Frame, RawFormat
 from yuuno.yuuno import Yuuno
 
@@ -200,7 +200,12 @@ class ClipHandler(RequestReplyServerConnection):
         if plane is None:
             return {'size': frame.get_size()}, []
 
-        return {'size': frame.get_size()}, [(yield frame.render(plane, format))]
+        if not isinstance(plane, (list, tuple)):
+            plane = [plane]
+
+        plane = [frame.render(p, format) for p in plane]
+        yield gather(plane)
+        return {'size': frame.get_size()}, [p.result() for p in plane]
 
     @future_yield_coro
     def on_frame(self, data, binaries) -> None:
