@@ -38,7 +38,7 @@ class TestVapourSynth(unittest.TestCase):
         self.vs = import_item("vapoursynth")
 
         # We will work with a dedicated VapourSynth-core.
-        self.core = self.vs.get_core()
+        self.core = self.vs.core.core
 
         self.black_clip_grey = self.core.std.BlankClip(width=10, height=10, format=self.vs.GRAY8)
         self.black_clip_yuv444 = self.core.std.BlankClip(width=10, height=10, format=self.vs.YUV444P8)
@@ -91,7 +91,6 @@ class TestVapourSynth(unittest.TestCase):
         self.assertEqual(extract_plane(self.black_clip_yuv420.get_frame(0), 0).mode, "L")
         self.assertEqual(extract_plane(self.black_clip_yuv420.get_frame(0), 0).mode, "L")
         self.assertEqual(extract_plane(self.black_clip_yuv420.get_frame(0), 0).mode, "L")
-
 
         self.assertEqual(extract_plane(self.black_clip_grey.get_frame(0), 0).size, (10, 10))
 

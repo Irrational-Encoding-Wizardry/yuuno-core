@@ -265,7 +265,7 @@ class VapourSynthClip(VapourSynthClipMixin, HasTraits):
     clip: VideoNode = Instance(VideoNode)
 
     def __init__(self, clip):
-        super(VapourSynthClip, self).__init__(clip=clip)
+        super(VapourSynthClip, self).__init__(clip)
 
 
 class VapourSynthFrame(VapourSynthClipMixin, HasTraits):
@@ -274,7 +274,8 @@ class VapourSynthFrame(VapourSynthClipMixin, HasTraits):
     clip: VideoNode = Instance(VideoNode, allow_none=True)
 
     def __init__(self, frame):
-        HasTraits.__init__(self, frame=frame)
+        super(VapourSynthFrame, self).__init__(None)
+        self.frame = frame
 
     @observe("frame")
     def _frame_observe(self, value):

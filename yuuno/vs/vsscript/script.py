@@ -26,7 +26,7 @@ from yuuno.utils import inline_resolved
 from yuuno.multi_scripts.script import ScriptManager, Script
 
 from yuuno.vs.vsscript.containermodule import create_module
-from yuuno.vs.vsscript.vs_capi import ScriptEnvironment
+from yuuno.vs.vsscript.vs_capi import ScriptEnvironment, does_own_vsscript
 from yuuno.vs.vsscript.vs_capi import enable_vsscript, disable_vsscript
 from yuuno.vs.vsscript.clip import WrappedClip
 from yuuno.vs.utils import is_single
@@ -145,6 +145,9 @@ class VSScriptManager(ScriptManager):
             enable_vsscript()
             self._does_manage_vsscript = True
 
+        elif does_own_vsscript():
+            pass
+
         # Make sure we have full control of VSScript
         elif not self._does_manage_vsscript:
             raise RuntimeError("The script manager does not control VSScript.")
@@ -154,6 +157,7 @@ class VSScriptManager(ScriptManager):
 
         # Create the core now.
         script = VSScript(self, name)
+        self.scripts[name] = script
         if initialize:
             script.initialize()
         return script
@@ -175,7 +179,7 @@ class VSScriptManager(ScriptManager):
         """
         Disposes all scripts and tries to clean up.
         """
+        self.dispose_all()
         if self._does_manage_vsscript:
             disable_vsscript()
             self._does_manage_vsscript = False
-        self.dispose_all()

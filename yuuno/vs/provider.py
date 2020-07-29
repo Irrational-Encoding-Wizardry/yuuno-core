@@ -118,31 +118,3 @@ class VSStandaloneScript(Script):
         with shadow_module('__vapoursynth__', self.main_module):
             with shadow_module('__main__', self.main_module):
                 exec(f, self.namespace, {})
-
-
-class VSScriptProvider(ScriptProvider):
-
-    def initialize(self, env: 'LocalSubprocessEnvironment') -> None:
-        """
-        Called after _all_ extensions have been loaded
-        and the system is ready to be loaded.
-        """
-        vs = self.yuuno.get_extension('VapourSynth')
-        vs.raw_force_compat = True
-        self.script = VSStandaloneScript(env)
-
-    def deinitialize(self) -> None:
-        """
-        Called when the environment is being disabled.
-        """
-        self.script.dispose()
-
-    def get_script(self) -> 'Script':
-        """
-        Returns the script.
-        """
-        return self.script
-
-    @classmethod
-    def get_registration(cls):
-        return

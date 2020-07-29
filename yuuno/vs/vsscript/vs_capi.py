@@ -15,11 +15,15 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from yuuno.vs.vsscript.capsules import Capsules
-import vapoursynth
+import base64
+import ctypes
+import marshal
 import functools
 
-import ctypes
+import vapoursynth
+
+from yuuno.vs.vsscript.capsules import Capsules
+from yuuno.vs.flags import Features
 
 
 class Counter(object):
@@ -57,7 +61,20 @@ class _VapourSynthCAPI(Capsules):
 VapourSynthCAPI = _VapourSynthCAPI()
 
 
+_controlling_vsscript = False
+
+
 def enable_vsscript():
+    global _controlling_vsscript
+
+    # VapourSynth R51:
+    # > Fake a reload.
+    if Features.ENVIRONMENT_POLICIES:
+        if _controlling_vsscript:
+            if not vapoursynth._using_vsscript:
+                vapoursynth._using_vsscript = True
+            return
+
     if VapourSynthCAPI.vpy_getVSApi() == ctypes.c_void_p(0):
         raise OSError("Couldn't detect a VapourSynth API Instance")
     if VapourSynthCAPI.vpy_initVSScript():
@@ -65,8 +82,18 @@ def enable_vsscript():
     if not vapoursynth._using_vsscript:
         raise RuntimeError("Failed to enable vsscript.")
 
+    _controlling_vsscript = True
+
+
+def does_own_vsscript():
+    global _controlling_vsscript
+    return _controlling_vsscript
+
 
 def disable_vsscript():
+    if not Features.ENVIRONMENT_POLICIES:
+        return
+
     if not vapoursynth._using_vsscript:
         return
     vapoursynth._using_vsscript = False
@@ -77,6 +104,9 @@ def _perform_in_environment(func):
     def _wrapper(self, *args, **kwargs):
         return self.perform(lambda: func(self, *args, **kwargs))
     return _wrapper
+
+
+_call_funcs = {}
 
 
 class ScriptEnvironment(object):
@@ -127,9 +157,18 @@ class ScriptEnvironment(object):
         if self.export is None:
             raise vapoursynth.Error("Tried to access dead core.")
 
+
         if not counter:
             counter = _run_counter()
         name = '__yuuno_%d_run_%d' % (id(self), counter)
+
+        # This technique allows arbitrary code to be executed
+        # without ever touching the global pyenv-dict.
+        c = compile('''from yuuno.vs.vsscript.vs_capi import _call_funcs; _call_funcs["%s"]()'''%name, filename="<yuuno-bootstrap>", mode="exec")
+        c = marshal.dumps(c)
+        c = base64.b64encode(c)
+        c = c.decode("ascii")
+        c = '(lambda marshal, base64: exec(marshal.loads(base64.b64decode(b"%s")), {}, {}))(__import__("marshal"), __import__("base64"))'%c
 
         result = None
         error = None
@@ -147,19 +186,26 @@ class ScriptEnvironment(object):
             filename = self.filename
         filename = filename.encode('utf-8')
 
-        self.export.pyenvdict[name] = _execute_func
+        _call_funcs[name] = _execute_func
         try:
-            if VapourSynthCAPI.vpy_evaluateScript(self._handle, ('%s()' % name).encode('ascii'), filename, 0):
+            if VapourSynthCAPI.vpy_evaluateScript(self._handle, c.encode('ascii'), filename, 0):
                 self._raise_error()
         finally:
-            del self.export.pyenvdict[name]
+            del _call_funcs[name]
 
         if error is not None:
             raise error
         return result
 
     def perform(self, func):
-        with self._env:
+        ewrapper = self._env
+
+        # R51 requires the use of Environment.use for threadsafe
+        # environment changes.
+        if hasattr(ewrapper, "use"):
+            ewrapper = ewrapper.use()
+
+        with ewrapper:
             return func()
 
     def exec(self, code):

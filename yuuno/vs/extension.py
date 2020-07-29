@@ -214,6 +214,9 @@ Settings to a value less than one makes it default to the number of hardware thr
 
         self.parent.log.debug("Enabling VSScript.")
         from yuuno.vs.vsscript.script import VSScriptManager
+        from yuuno.vs.vsscript.vs_capi import enable_vsscript
+        enable_vsscript()
+
         self.script_manager = VSScriptManager()
         managers.register_manager('VSScript', self.script_manager)
         self.parent.log.debug("VSScript enabled.")

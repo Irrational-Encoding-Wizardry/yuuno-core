@@ -112,6 +112,12 @@ class Features(enum.Flag):
         # AT R44
         return hasattr(vs, 'Environment')
 
+    @flag(256)
+    @staticmethod
+    def ENVIRONMENT_POLICIES(vs):
+        # AT R51
+        return hasattr(vs, 'EnvironmentPolicy')
+
     def __bool__(self):
         return self.value and self in self.current
 
