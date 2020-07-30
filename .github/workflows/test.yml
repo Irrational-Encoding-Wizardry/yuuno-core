@@ -23,24 +23,6 @@ jobs:
           python-version: 3.8
         - vs-version: 49
           python-version: 3.8
-        - vs-version: 48
-          python-version: 3.7
-        - vs-version: 47
-          python-version: 3.7
-        - vs-version: 47.2
-          python-version: 3.7
-        - vs-version: 47.1
-          python-version: 3.7
-        - vs-version: 46
-          python-version: 3.7
-        - vs-version: 45.1
-          python-version: 3.7
-        - vs-version: 45.0
-          python-version: 3.7
-        - vs-version: 45
-          python-version: 3.7
-        - vs-version: 44
-          python-version: 3.6
 
     steps:
     - uses: actions/checkout@v2
