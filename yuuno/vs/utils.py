@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import enum
 import types
+from contextlib import contextmanager
 from typing import AnyStr, Callable
 
 from traitlets.utils.importstring import import_item
@@ -53,6 +54,15 @@ def filter_or_import(name: AnyStr) -> Callable:
         return getattr(getattr(core, ns), func)
     except (ValueError, AttributeError):
         return import_item(name)
+
+
+def get_environment():
+    import vapoursynth
+    if Features.ENVIRONMENT_POLICIES:
+        return vapoursynth.get_current_environment().use
+    else:
+        env = vapoursynth.vpy_current_environment()
+        return lambda: env
 
 
 def is_single():
