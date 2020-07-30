@@ -59,4 +59,4 @@ jobs:
         pip install .
     - name: Running tests
       run: |
-        python -m unittest discover -s ./tests
+        python -m unittest discover --verbose -s ./tests
