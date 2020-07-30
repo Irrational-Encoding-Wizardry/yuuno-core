@@ -53,22 +53,35 @@ class TestVapourSynth(unittest.TestCase):
     def test_001_vapoursynth_frame_plane_size(self):
         from yuuno.vs.clip import calculate_size
 
+        print("A")
         self.assertEqual(calculate_size(self.black_clip_grey.get_frame(0), 0), (10, 10))
+        print("B")
 
         self.assertEqual(calculate_size(self.black_clip.get_frame(0), 0), (10, 10))
+        print("C")
         self.assertEqual(calculate_size(self.black_clip.get_frame(0), 1), (10, 10))
+        print("D")
         self.assertEqual(calculate_size(self.black_clip.get_frame(0), 2), (10, 10))
 
+        print("E")
         self.assertEqual(calculate_size(self.black_clip_yuv444.get_frame(0), 0), (10, 10))
+        print("F")
         self.assertEqual(calculate_size(self.black_clip_yuv444.get_frame(0), 1), (10, 10))
+        print("G")
         self.assertEqual(calculate_size(self.black_clip_yuv444.get_frame(0), 2), (10, 10))
 
+        print("H")
         self.assertEqual(calculate_size(self.black_clip_yuv422.get_frame(0), 0), (10, 10))
+        print("I")
         self.assertEqual(calculate_size(self.black_clip_yuv422.get_frame(0), 1), ( 5, 10))
+        print("K")
         self.assertEqual(calculate_size(self.black_clip_yuv422.get_frame(0), 2), ( 5, 10))
 
+        print("L")
         self.assertEqual(calculate_size(self.black_clip_yuv420.get_frame(0), 0), (10, 10))
+        print("M")
         self.assertEqual(calculate_size(self.black_clip_yuv420.get_frame(0), 1), ( 5,  5))
+        print("O")
         self.assertEqual(calculate_size(self.black_clip_yuv420.get_frame(0), 2), ( 5,  5))
 
     def test_002_vapoursynth_plane_extract(self):
